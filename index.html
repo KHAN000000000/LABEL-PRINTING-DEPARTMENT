@@ -614,6 +614,7 @@ function checkPassword() {
     }
 }
 
+
 async function showSystem() {
     const savedUser = sessionStorage.getItem('gii_user');
     if (savedUser) currentUser = JSON.parse(savedUser);
@@ -652,29 +653,30 @@ function applyUserPermissions() {
 
     const isAdmin = currentUser.role === 'admin';
 
-    // 1. إخفاء أزرار الحذف والإغلاق (للمستخدم العادي فقط)
+    // 1. إخفاء أزرار الحذف والإغلاق
     document.querySelectorAll('.btn-delete, .btn-closure').forEach(btn => {
         btn.style.display = isAdmin ? '' : 'none';
     });
 
-    // 2. إظهار Checkbox للجميع (للطباعة)
-    const selectAllHeader = document.getElementById('selectAllHeader');
-    if (selectAllHeader) selectAllHeader.style.display = '';
-
-    document.querySelectorAll('.row-checkbox').forEach(cb => {
-        cb.style.display = '';
-    });
-
-    // 3. إخفاء زر EDIT + عمود EDIT للمستخدم العادي فقط
+    // 2. إخفاء أزرار EDIT + عمود EDIT لمستخدم entry
     if (!isAdmin) {
-        document.querySelectorAll('.btn-edit-row').forEach(btn => {
+        document.querySelectorAll('.btn-edit-row, .btn-save-row').forEach(btn => {
             btn.style.display = 'none';
         });
 
-        // إخفاء عمود الـ EDIT من الجدول
-        const tableHeaders = document.querySelectorAll('#mainTable thead tr th');
-        if (tableHeaders.length > 0) {
-            tableHeaders[tableHeaders.length - 1].style.display = 'none'; // آخر عمود = EDIT
+        // إخفاء عمود الـ EDIT
+        const editColumn = document.querySelectorAll('#mainTable thead tr th:last-child');
+        if (editColumn.length > 0) {
+            editColumn[0].style.display = 'none';
+        }
+    } else {
+        // لو admin → يظهر كل حاجة
+        document.querySelectorAll('.btn-edit-row, .btn-save-row').forEach(btn => {
+            btn.style.display = '';
+        });
+        const editColumn = document.querySelectorAll('#mainTable thead tr th:last-child');
+        if (editColumn.length > 0) {
+            editColumn[0].style.display = '';
         }
     }
 }
@@ -699,7 +701,11 @@ function updateLiveDate() {
 async function addData() {
     const styleNo  = document.getElementById('styleNo').value.trim();
     const totalVal = Number(document.getElementById('total').value);
-    if (!styleNo || !totalVal) { alert('Please fill in Style No and Total Qty.'); return; }
+    if (!styleNo || !totalVal) { 
+        alert('Please fill in Style No and Total Qty.'); 
+        return; 
+    }
+
     dataRecords.push({
         id:     Date.now(),
         styleNo,
@@ -711,17 +717,13 @@ async function addData() {
         season: document.getElementById('season').value.trim() || 'N/A',
         total:  totalVal
     });
+
     resetForm();
     renderTable();
     updateCharts();
+    applyUserPermissions();     // ← مهم
     await pushData();
     document.getElementById('styleNo').focus();
-}
-
-async function saveData() {
-    renderTable();
-    updateCharts();
-    await pushData();
 }
 
 function resetForm() {
@@ -734,6 +736,7 @@ function resetForm() {
 function renderTable() {
     const tbody = document.getElementById('tableBody');
     let totalSum = 0;
+
     tbody.innerHTML = dataRecords.map(r => {
         totalSum += r.total;
         return `
@@ -752,10 +755,23 @@ function renderTable() {
             </td>
         </tr>`;
     }).join('');
+
     document.getElementById('grandTotal').innerText  = totalSum;
     document.getElementById('recordCount').innerText = dataRecords.length + ' record' + (dataRecords.length !== 1 ? 's' : '');
+
+    // ←←←←← إضافة مهمة جداً
+    applyUserPermissions();
 }
 
+// =============================================
+//  SAVE DATA
+// =============================================
+async function saveData() {
+    renderTable();
+    updateCharts();
+    applyUserPermissions();     // مهم جداً عشان يخفي زرار EDIT
+    await pushData();
+}
 // =============================================
 //  INLINE EDIT
 // =============================================
