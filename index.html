@@ -302,13 +302,16 @@
 <!-- LOGIN -->
 <div id="loginOverlay">
     <div class="login-card">
-        <div class="login-logo-area">GII</div>
-        <div class="login-title">LABEL PRINTING SYSTEM</div>
-        <div class="login-sub">GLOBE INTERNATIONAL INDUSTRIES</div>
-        <input type="password" id="passInput" placeholder="• • • • • • • •" class="login-input" autocomplete="current-password" />
-        <button onclick="checkPassword()" class="login-btn">ENTER SYSTEM</button>
-        <p id="loginError" class="login-error">⚠ Incorrect password. Please try again.</p>
-    </div>
+    <div class="login-logo-area">GII</div>
+    <div class="login-title">LABEL PRINTING SYSTEM</div>
+    <div class="login-sub">GLOBE INTERNATIONAL INDUSTRIES</div>
+    
+    <input type="text" id="usernameInput" placeholder="Username" class="login-input" style="margin-bottom:8px;">
+    <input type="password" id="passInput" placeholder="Password" class="login-input">
+    
+    <button onclick="checkPassword()" class="login-btn">ENTER SYSTEM</button>
+    <p id="loginError" class="login-error">⚠ Incorrect username or password.</p>
+</div>
 </div>
 
 <!-- MAIN -->
@@ -466,7 +469,26 @@ const JSONBIN_BASE    = 'https://api.jsonbin.io/v3/b';
 // =============================================
 //  APP STATE
 // =============================================
-const CORRECT_PASSWORD = 'YNKN2026';
+// =============================================
+//  USERS & ROLES
+// =============================================
+const USERS = [
+    {
+        username: "admin",
+        password: "YNKN2026",
+        role: "admin",
+        name: "مدير النظام"
+    },
+    {
+        username: "entry",
+        password: "Entry2026",
+        role: "user",
+        name: "موظف الإدخال"
+    }
+];
+
+// Current logged in user
+let currentUser = null;
 let dataRecords   = [];
 let reportHistory = [];
 let cutNoChart, totalQtyChart;
@@ -576,8 +598,15 @@ async function autoSync() {
 //  AUTH
 // =============================================
 function checkPassword() {
-    if (document.getElementById('passInput').value === CORRECT_PASSWORD) {
+    const username = document.getElementById('usernameInput').value.trim();
+    const password = document.getElementById('passInput').value.trim();
+
+    const user = USERS.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
+
+    if (user) {
+        currentUser = user;
         sessionStorage.setItem('gii_auth', 'true');
+        sessionStorage.setItem('gii_user', JSON.stringify(user));
         showSystem();
     } else {
         document.getElementById('loginError').style.display = 'block';
@@ -586,15 +615,68 @@ function checkPassword() {
 }
 
 async function showSystem() {
+    const savedUser = sessionStorage.getItem('gii_user');
+    if (savedUser) currentUser = JSON.parse(savedUser);
+
     await fetchData();
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('mainContent').style.display = 'block';
+
+    // إظهار اسم المستخدم في الهيدر (اختياري)
+    updateUserDisplay();
+
     document.getElementById('currentDatePrint').innerText = new Date().toLocaleDateString('en-GB');
     updateLiveDate();
     setInterval(updateLiveDate, 1000);
+
     renderTable();
     initCharts();
+    applyUserPermissions();     // ← مهم جدًا
     syncInterval = setInterval(autoSync, 4000);
+
+    applyUserPermissions();   // ← مهم جدًا
+}
+function updateUserDisplay() {
+    // يمكنك إضافته في الهيدر لاحقًا
+    console.log(`Logged in as: ${currentUser.name} (${currentUser.role})`);
+}
+
+// =============================================
+//  USER PERMISSIONS
+// =============================================
+// =============================================
+//  USER PERMISSIONS (محدثة)
+// =============================================
+function applyUserPermissions() {
+    if (!currentUser) return;
+
+    const isAdmin = currentUser.role === 'admin';
+
+    // 1. إخفاء أزرار الحذف والإغلاق (للمستخدم العادي فقط)
+    document.querySelectorAll('.btn-delete, .btn-closure').forEach(btn => {
+        btn.style.display = isAdmin ? '' : 'none';
+    });
+
+    // 2. إظهار Checkbox للجميع (للطباعة)
+    const selectAllHeader = document.getElementById('selectAllHeader');
+    if (selectAllHeader) selectAllHeader.style.display = '';
+
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+        cb.style.display = '';
+    });
+
+    // 3. إخفاء زر EDIT + عمود EDIT للمستخدم العادي فقط
+    if (!isAdmin) {
+        document.querySelectorAll('.btn-edit-row').forEach(btn => {
+            btn.style.display = 'none';
+        });
+
+        // إخفاء عمود الـ EDIT من الجدول
+        const tableHeaders = document.querySelectorAll('#mainTable thead tr th');
+        if (tableHeaders.length > 0) {
+            tableHeaders[tableHeaders.length - 1].style.display = 'none'; // آخر عمود = EDIT
+        }
+    }
 }
 
 function logout() {
