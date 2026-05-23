@@ -391,14 +391,15 @@
                 </div>
             </div>
             <div class="action-bar">
-                <button onclick="addData()" class="btn btn-save">✓ SAVE</button>
-                <button onclick="resetForm()" class="btn btn-reset">↺ RESET</button>
-                <button onclick="exportToExcel()" class="btn btn-excel">⬇ EXCEL</button>
-                <button onclick="exportToPDF()" class="btn btn-pdf">⬇ PDF</button>
-                <button onclick="printSelectedReport()" class="btn btn-print">⎙ PRINT</button>
-                <button onclick="dailyClosure()" class="btn btn-closure">⊛ CLOSURE</button>
-                <button onclick="deleteSelectedRows()" class="btn btn-delete">✕ DELETE</button>
-            </div>
+    <button onclick="addData()" class="btn btn-save">✓ SAVE</button>
+    <button onclick="resetForm()" class="btn btn-reset">↺ RESET</button>
+    <button onclick="exportToExcel()" class="btn btn-excel">⬇ EXCEL</button>
+    <button onclick="importExcel()" class="btn btn-excel" id="importBtn" style="display:none;">⬆ IMPORT EXCEL</button>
+    <button onclick="exportToPDF()" class="btn btn-pdf">⬇ PDF</button>
+    <button onclick="printSelectedReport()" class="btn btn-print">⎙ PRINT</button>
+    <button onclick="dailyClosure()" class="btn btn-closure">⊛ CLOSURE</button>
+    <button onclick="deleteSelectedRows()" class="btn btn-delete">✕ DELETE</button>
+</div>
         </div>
 
         <!-- SEARCH -->
@@ -653,33 +654,29 @@ function applyUserPermissions() {
 
     const isAdmin = currentUser.role === 'admin';
 
-    // 1. إخفاء أزرار الحذف والإغلاق
     document.querySelectorAll('.btn-delete, .btn-closure').forEach(btn => {
         btn.style.display = isAdmin ? '' : 'none';
     });
 
-    // 2. إخفاء أزرار EDIT + عمود EDIT لمستخدم entry
+    // Import Button
+    const importBtn = document.getElementById('importBtn');
+    if (importBtn) importBtn.style.display = isAdmin ? '' : 'none';
+
     if (!isAdmin) {
         document.querySelectorAll('.btn-edit-row, .btn-save-row').forEach(btn => {
             btn.style.display = 'none';
         });
-
-        // إخفاء عمود الـ EDIT
         const editColumn = document.querySelectorAll('#mainTable thead tr th:last-child');
-        if (editColumn.length > 0) {
-            editColumn[0].style.display = 'none';
-        }
+        if (editColumn.length > 0) editColumn[0].style.display = 'none';
     } else {
-        // لو admin → يظهر كل حاجة
         document.querySelectorAll('.btn-edit-row, .btn-save-row').forEach(btn => {
             btn.style.display = '';
         });
         const editColumn = document.querySelectorAll('#mainTable thead tr th:last-child');
-        if (editColumn.length > 0) {
-            editColumn[0].style.display = '';
-        }
+        if (editColumn.length > 0) editColumn[0].style.display = '';
     }
 }
+    
 
 function logout() {
     sessionStorage.removeItem('gii_auth');
@@ -938,6 +935,75 @@ async function dailyClosure() {
     dataRecords = [];
     await saveData();
     alert(`Report for ${date} archived successfully.`);
+}
+
+// =============================================
+//  IMPORT EXCEL (Admin Only)
+// =============================================
+function importExcel() {
+    if (currentUser?.role !== 'admin') {
+        alert("هذه الميزة متاحة للمدير فقط");
+        return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx, .xls';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(ev) {
+            try {
+                const data = new Uint8Array(ev.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                let importedCount = 0;
+
+                jsonData.forEach(row => {
+                    const styleNo = (row["STYLE NO"] || row["Style No"] || row["STYLE"] || "").toString().trim();
+                    if (!styleNo) return;
+
+                    const record = {
+                        id: Date.now() + importedCount,
+                        styleNo: styleNo,
+                        erpNo: (row["ERP NO"] || row["ERP"] || "N/A").toString().trim(),
+                        line: (row["LINE"] || row["Line"] || "N/A").toString().trim(),
+                        batch: (row["BATCH"] || row["Batch"] || "N/A").toString().trim(),
+                        cutNo: parseInt(row["CUT NO"] || row["CUT"] || row["Cut No"] || 0),
+                        color: (row["COLOR"] || row["Color"] || "N/A").toString().trim(),
+                        season: (row["SEASON"] || row["Season"] || "N/A").toString().trim(),
+                        total: parseInt(row["TOTAL"] || row["Total Qty"] || row["TOTAL QTY"] || 0)
+                    };
+
+                    if (record.total > 0) {
+                        dataRecords.push(record);
+                        importedCount++;
+                    }
+                });
+
+                if (importedCount > 0) {
+                    renderTable();
+                    updateCharts();
+                    applyUserPermissions();
+                    await pushData();
+                    alert(`✅ تم استيراد ${importedCount} سجل بنجاح!`);
+                } else {
+                    alert("⚠ لم يتم العثور على بيانات صالحة في الملف");
+                }
+
+            } catch (err) {
+                console.error(err);
+                alert("❌ حدث خطأ أثناء قراءة الملف");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    };
+    input.click();
 }
 
 // =============================================
