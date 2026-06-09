@@ -894,6 +894,17 @@ async function exportToExcel() {
     const now = new Date();
     const seasonYear = now.getFullYear();
     const seasonMonth = now.getMonth() + 1;
+    const yearShort = seasonYear % 100;
+    // ISO week number
+    const getISOWeek = (d) => {
+        const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        const dayNum = target.getUTCDay() || 7;
+        target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+        return Math.ceil((((target - yearStart) / 86400000) + 1) / 7);
+    };
+    const weekNum = getISOWeek(now);
+    const FIXED_NUMBER = 25548;
 
     // ── Build with ExcelJS (supports embedded images) ────────────────────────
     const wb = new ExcelJS.Workbook();
@@ -916,16 +927,7 @@ async function exportToExcel() {
     }));
     ws1.getRow(1).font = { bold:true };
 
-    // Sheet 2: Label Format
-    const ws2 = wb.addWorksheet("Label Format");
-    ws2.columns = [
-        { width: 13 },
-        { width: 12.33 },
-        { width: 3.11 },
-        { width: 11 }
-    ];
-
-    // Register images once
+    // Register images once on the workbook (reusable across sheets)
     const imgFactory = wb.addImage({ base64: ICON_FACTORY_B64, extension: 'png' });
     const imgEdit    = wb.addImage({ base64: ICON_EDIT_B64,    extension: 'png' });
     const imgArrow   = wb.addImage({ base64: ICON_ARROW_B64,   extension: 'png' });
@@ -942,10 +944,36 @@ async function exportToExcel() {
     const fontHuge   = { name:'Calibri', size:48, bold:true };
     const fontMed    = { name:'Calibri', size:20, bold:true };
 
+    // Sanitize sheet name (Excel forbids: \ / ? * [ ] : and 31 char max)
+    const sanitize = (s) => String(s||'').replace(/[\\\/\?\*\[\]:]/g,'-').slice(0,28);
+    const usedNames = new Set();
+    const uniqueName = (base) => {
+        let name = base || 'Label';
+        let i = 2;
+        while (usedNames.has(name.toLowerCase())) {
+            name = `${base.slice(0, 25)}_${i++}`;
+        }
+        usedNames.add(name.toLowerCase());
+        return name;
+    };
+
     selectedSamples.forEach((sample, idx) => {
-        const baseRow = idx * (BLOCK + SPACER);
+        // One sheet per selected row
+        const sheetName = uniqueName(sanitize(
+            (sample.batch ? `LOT ${sample.batch}` : `Label ${idx+1}`)
+        ));
+        const ws2 = wb.addWorksheet(sheetName);
+        ws2.columns = [
+            { width: 13 },
+            { width: 12.33 },
+            { width: 3.11 },
+            { width: 11 }
+        ];
+        const baseRow = 0;
         // Excel rows are 1-indexed
         const R = (offset) => baseRow + offset + 1;
+
+
 
         // Row 1: spacing (blank)
         // Row 2: LOT# {batch}
@@ -971,22 +999,23 @@ async function exportToExcel() {
         ws2.getCell(`D${R(3)}`).font = fontBig;
         ws2.getCell(`D${R(3)}`).alignment = leftAlign;
 
-        // Row 5: edit icon (A) + total / cutNo
-        ws2.getCell(`B${R(4)}`).value = Number(sample.total)||0;
+        // Row 5: edit icon (A) + YY / week
+        ws2.getCell(`B${R(4)}`).value = yearShort;
         ws2.getCell(`B${R(4)}`).font = fontBig;
         ws2.getCell(`B${R(4)}`).alignment = rightAlign;
         ws2.getCell(`C${R(4)}`).value = '/';
         ws2.getCell(`C${R(4)}`).font = fontBig;
         ws2.getCell(`C${R(4)}`).alignment = centerAlign;
-        ws2.getCell(`D${R(4)}`).value = Number(sample.cutNo)||0;
+        ws2.getCell(`D${R(4)}`).value = weekNum;
         ws2.getCell(`D${R(4)}`).font = fontBig;
         ws2.getCell(`D${R(4)}`).alignment = leftAlign;
 
-        // Row 6: arrow icon (A) + big total (B:D, 48pt)
-        ws2.getCell(`B${R(5)}`).value = Number(sample.total)||0;
+        // Row 6: arrow icon (A) + fixed number (B:D, 48pt)
+        ws2.getCell(`B${R(5)}`).value = FIXED_NUMBER;
         ws2.mergeCells(`B${R(5)}:D${R(5)}`);
         ws2.getCell(`B${R(5)}`).font = fontHuge;
         ws2.getCell(`B${R(5)}`).alignment = leftAlign;
+
 
         // Row 7: Line#
         ws2.getCell(`B${R(6)}`).value = 'Line#:';
