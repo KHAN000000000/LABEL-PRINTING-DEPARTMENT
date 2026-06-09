@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -45,7 +46,7 @@
         }
         @media (max-width: 480px) { .login-card { padding: 32px 24px; border-radius: 16px; } }
         .login-logo-area {
-            width: 72px; height: 72px; background: var(--navy); border-radius: 16px;
+            width: 140px; height: 85px; background: var(--navy); border-radius: 16px;
             display: flex; align-items: center; justify-content: center;
             margin: 0 auto 24px;
             font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800;
@@ -109,7 +110,7 @@
         .header-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: white; letter-spacing: 0.5px; }
         .header-sub { font-size: 10px; color: rgba(255,255,255,0.5); letter-spacing: 1px; margin-top: 1px; }
         @media (min-width: 768px) {
-            .header-logo { width: 40px; height: 40px; font-size: 13px; border-radius: 8px; }
+            .header-logo { width: 70px; height: 40px; font-size: 13px; border-radius: 8px; }
             .header-title { font-size: 16px; letter-spacing: 1px; }
             .header-sub { font-size: 11px; letter-spacing: 2px; }
         }
@@ -302,7 +303,7 @@
 <!-- LOGIN -->
 <div id="loginOverlay">
     <div class="login-card">
-    <div class="login-logo-area">GII</div>
+    <div class="login-logo-area">YNKN</div>
     <div class="login-title">LABEL PRINTING SYSTEM</div>
     <div class="login-sub">GLOBE INTERNATIONAL INDUSTRIES</div>
     
@@ -326,7 +327,7 @@
     <header id="appHeader" class="no-print">
         <div class="header-row1">
             <div class="header-brand">
-                <div class="header-logo">GII</div>
+                <div class="header-logo">YNKN</div>
                 <div>
                     <div class="header-title">LABEL PRINTING DEPT</div>
                     <div class="header-sub">GLOBE INTERNATIONAL INDUSTRIES</div>
@@ -859,16 +860,198 @@ function printSelectedReport() {
 // =============================================
 //  EXCEL EXPORT
 // =============================================
-function exportToExcel() {
+// Icons (base64 PNGs) for the Label Format sheet
+const ICON_ARROW_B64   = "iVBORw0KGgoAAAANSUhEUgAAAFwAAABMCAYAAADgOdDDAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAASmSURBVHhe7ZwhUOQwFIbDGXCsW+RKHEgci0OCQ+IAh8QhkSgGiQQHDhygkODAgQNmmAEHil7+XML0drJtmiavrzTfzJu2C7NJv75NkzbtRCYRCTL+6GWCiCScmCScGNZt+MPDg3h5eVHrd3d34uPjQ61fX1+L2dlZ0e/31fb8/Lzo9XpqfTgcqiVX2Ah/enoSV1dXSiaW2PZlampKiV9cXFTLhYUF/ZfmaUw4Mvfi4iKI4DJYHQAIp+T+/j5bX1/PpAQc6EZCNkfZ0dFR9vn5qWtFB5nw8/PzbHl52SqgqZiZmcl2d3ez5+dnXcv4RBeOTEJG2XaYS+DXhl/d4+OjrnU8oglH0yHbSusOcg2I39vb03sQhyjC9/f3s8nJSetOtSGQKLGamaDCUUlu7bRvTE9Pq+YwNMGEHx8fq0raKt/mQAK9v7/rvaxPEOHIBFtlf0vIkWww6bWF/3bZJkJJryWck+zBYGD9PGSEkO4tnFtmow/dBulewjFqtFWmyQBU0tFt9KWycBxdDIltFWkyDFTSfQdIlYVjCGyrQNORh0I6RqUYTVelknD0tW2Fc4hRKKSjPa96xdFZOEaR/X7fWjCHsEEhHVcbq+AsfG1tzVoglxhHbOloWm5vb3Vp5TgJR3bbCuMURcSWvr29rUsqx0k4zsi2gjhFGTGlo9fm2pY73dM8ODgQb29veosnsi3Va+PBfdOlpaUo909PT0/FysqK3ipAae8QsTJdytYlFNPJuYUxMl2ePIU8mEI2L/oTO52ceSUzXFxeXqplKL6+vsTZ2ZneGk9np7rFkI45NmV0em5haOmYmldGJ9vwUUK16WjHZfdQb9lJs2cloTId7XjZQUvCNaGbl3Ek4TlCSE8ZXhHIdhm1+pKEa0zfAVOot7a21LoPaeDjAGRPTEwo2aurq+rk5wt6KkV0vlsYSja+A9+FbmGR9E5neMjMxnfhuaOyDO+s8JCyDRBeRieFx5AN5ubm9FoBsvBO8f39rZaYzCR//upadt2QB08tXaZNdEp4DNkmXGdjdaZJkfsapRkxbGxs6LUS/nkvBnMv8K+co4iYmY3Ad7reRHYSjvuAtoI4xThiy0Zg+p8rTsIBbpLaCuMSNmLLNifL4BOBALI8VoaEiFEoMhuxubmpynHFWTg4PDxUhZgjyynyUMkeDAbxJnMauD4WaKCSjbi5uVFlVaGycMwz5Ph4YB4K2Ts7O7q0alQWDjg+uWagkI13B1RtSgxewgG3vjmgkI12Gx0IX7yFA07S2yAb1BIOuEhvg2xQWzhow9C/ToSSDYIIB22YtO8TOEGGkg2CCQfol3J/+0+VQNfPtzcyjqDCASqIitp2oC2BpPEZ1LgQXLihrdkeI6vzRBMOUHGcUHu9nnXnOMVwOIyW1XmiCjdAPC584Wxv29mmAl1JXMuucnm1LiTC82CA0vQFsCbeV2hobOYVnhY4OTn5eRVqbOT55Od1qHi8T2a3/gstbKa6QXr+Zb91yQvGsmySJRVs5xYa6XiFNV5lDV5fX/97jgavsDaTbyAUkgGWXASPkp7xISZNVyYmCScmCScmCScmCScmCScmCSdFiL/jjoU2HrEgRAAAAABJRU5ErkJggg==";
+const ICON_EDIT_B64    = "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";
+const ICON_FACTORY_B64 = "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";
+
+async function exportToExcel() {
+    // ── Sheet 1 data with SheetJS for the simple data sheet ──────────────────
     const data = dataRecords.map(r => ({
         "STYLE NO": r.styleNo, "ERP NO": r.erpNo, "LINE": r.line, "BATCH": r.batch,
         "CUT NO": r.cutNo, "COLOR": r.color, "SEASON": r.season, "TOTAL": r.total
     }));
     data.push({ "STYLE NO":"GRAND TOTAL","ERP NO":"","LINE":"","BATCH":"","CUT NO":"","COLOR":"","SEASON":"","TOTAL": dataRecords.reduce((s,r)=>s+r.total,0) });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Labels Report");
-    XLSX.writeFile(wb, `Label_Report_${new Date().toLocaleDateString('en-GB').replace(/\//g,'-')}.xlsx`);
+
+    // ── Selected rows ─────────────────────────────────────────────────────────
+    const selectedSamples = [];
+    const rows = document.querySelectorAll('#tableBody tr');
+    for (const row of rows) {
+        const cb = row.querySelector('.row-checkbox');
+        if (cb && cb.checked) {
+            const cells = row.querySelectorAll('td');
+            selectedSamples.push({
+                styleNo: cells[1]?.innerText||'', erpNo: cells[2]?.innerText||'',
+                line:    cells[3]?.innerText||'',  batch: cells[4]?.innerText||'',
+                cutNo:   cells[5]?.innerText||'',  color: cells[6]?.innerText||'',
+                season:  cells[7]?.innerText||'',  total: cells[8]?.innerText||''
+            });
+        }
+    }
+    if (!selectedSamples.length && dataRecords.length) selectedSamples.push(dataRecords[0]);
+    if (!selectedSamples.length) selectedSamples.push({ styleNo:'', erpNo:'', line:'', batch:'', cutNo:'', color:'', season:'', total:'' });
+
+    const now = new Date();
+    const seasonYear = now.getFullYear();
+    const seasonMonth = now.getMonth() + 1;
+
+    // ── Build with ExcelJS (supports embedded images) ────────────────────────
+    const wb = new ExcelJS.Workbook();
+
+    // Sheet 1: Labels Report
+    const ws1 = wb.addWorksheet("Labels Report");
+    ws1.columns = [
+        { header:"STYLE NO", key:"styleNo", width:14 },
+        { header:"ERP NO",   key:"erpNo",   width:12 },
+        { header:"LINE",     key:"line",    width:8 },
+        { header:"BATCH",    key:"batch",   width:10 },
+        { header:"CUT NO",   key:"cutNo",   width:10 },
+        { header:"COLOR",    key:"color",   width:16 },
+        { header:"SEASON",   key:"season",  width:10 },
+        { header:"TOTAL",    key:"total",   width:10 }
+    ];
+    data.forEach(d => ws1.addRow({
+        styleNo:d["STYLE NO"], erpNo:d["ERP NO"], line:d["LINE"], batch:d["BATCH"],
+        cutNo:d["CUT NO"], color:d["COLOR"], season:d["SEASON"], total:d["TOTAL"]
+    }));
+    ws1.getRow(1).font = { bold:true };
+
+    // Sheet 2: Label Format
+    const ws2 = wb.addWorksheet("Label Format");
+    ws2.columns = [
+        { width: 13 },
+        { width: 12.33 },
+        { width: 3.11 },
+        { width: 11 }
+    ];
+
+    // Register images once
+    const imgFactory = wb.addImage({ base64: ICON_FACTORY_B64, extension: 'png' });
+    const imgEdit    = wb.addImage({ base64: ICON_EDIT_B64,    extension: 'png' });
+    const imgArrow   = wb.addImage({ base64: ICON_ARROW_B64,   extension: 'png' });
+
+    const BLOCK = 10, SPACER = 2;
+    const thickBottom = { bottom: { style:'thick', color:{argb:'FF000000'} } };
+
+    const centerAlign = { horizontal:'center', vertical:'middle' };
+    const rightAlign  = { horizontal:'right',  vertical:'middle' };
+    const leftAlign   = { horizontal:'left',   vertical:'middle' };
+    const topCenter   = { horizontal:'center', vertical:'top' };
+
+    const fontBig    = { name:'Calibri', size:28, bold:true };
+    const fontHuge   = { name:'Calibri', size:48, bold:true };
+    const fontMed    = { name:'Calibri', size:20, bold:true };
+
+    selectedSamples.forEach((sample, idx) => {
+        const baseRow = idx * (BLOCK + SPACER);
+        // Excel rows are 1-indexed
+        const R = (offset) => baseRow + offset + 1;
+
+        // Row 1: spacing (blank)
+        // Row 2: LOT# {batch}
+        ws2.getCell(`A${R(1)}`).value = 'LOT# ' + (sample.batch||'0000');
+        ws2.mergeCells(`A${R(1)}:D${R(1)}`);
+        ws2.getCell(`A${R(1)}`).font = fontBig;
+        ws2.getCell(`A${R(1)}`).alignment = centerAlign;
+
+        // Row 3: ERP NO:{erpNo}
+        ws2.getCell(`A${R(2)}`).value = 'ERP NO:' + (sample.erpNo||'0000');
+        ws2.mergeCells(`A${R(2)}:D${R(2)}`);
+        ws2.getCell(`A${R(2)}`).font = fontBig;
+        ws2.getCell(`A${R(2)}`).alignment = centerAlign;
+
+        // Row 4: factory icon (A) + year / month
+        ws2.getCell(`B${R(3)}`).value = seasonYear;
+        ws2.getCell(`B${R(3)}`).font = fontBig;
+        ws2.getCell(`B${R(3)}`).alignment = rightAlign;
+        ws2.getCell(`C${R(3)}`).value = '/';
+        ws2.getCell(`C${R(3)}`).font = fontBig;
+        ws2.getCell(`C${R(3)}`).alignment = centerAlign;
+        ws2.getCell(`D${R(3)}`).value = seasonMonth;
+        ws2.getCell(`D${R(3)}`).font = fontBig;
+        ws2.getCell(`D${R(3)}`).alignment = leftAlign;
+
+        // Row 5: edit icon (A) + total / cutNo
+        ws2.getCell(`B${R(4)}`).value = Number(sample.total)||0;
+        ws2.getCell(`B${R(4)}`).font = fontBig;
+        ws2.getCell(`B${R(4)}`).alignment = rightAlign;
+        ws2.getCell(`C${R(4)}`).value = '/';
+        ws2.getCell(`C${R(4)}`).font = fontBig;
+        ws2.getCell(`C${R(4)}`).alignment = centerAlign;
+        ws2.getCell(`D${R(4)}`).value = Number(sample.cutNo)||0;
+        ws2.getCell(`D${R(4)}`).font = fontBig;
+        ws2.getCell(`D${R(4)}`).alignment = leftAlign;
+
+        // Row 6: arrow icon (A) + big total (B:D, 48pt)
+        ws2.getCell(`B${R(5)}`).value = Number(sample.total)||0;
+        ws2.mergeCells(`B${R(5)}:D${R(5)}`);
+        ws2.getCell(`B${R(5)}`).font = fontHuge;
+        ws2.getCell(`B${R(5)}`).alignment = leftAlign;
+
+        // Row 7: Line#
+        ws2.getCell(`B${R(6)}`).value = 'Line#:';
+        ws2.mergeCells(`B${R(6)}:C${R(6)}`);
+        ws2.getCell(`B${R(6)}`).font = fontBig;
+        ws2.getCell(`B${R(6)}`).alignment = centerAlign;
+        ws2.getCell(`D${R(6)}`).value = Number(sample.line)||0;
+        ws2.getCell(`D${R(6)}`).font = fontBig;
+        ws2.getCell(`D${R(6)}`).alignment = leftAlign;
+
+        // Row 8: style-color
+        ws2.getCell(`A${R(7)}`).value = (sample.styleNo||'') + '-' + (sample.color||'');
+        ws2.mergeCells(`A${R(7)}:D${R(7)}`);
+        ws2.getCell(`A${R(7)}`).font = fontBig;
+        ws2.getCell(`A${R(7)}`).alignment = centerAlign;
+
+        // Row 9: Cut#
+        ws2.getCell(`B${R(8)}`).value = 'Cut#:';
+        ws2.mergeCells(`B${R(8)}:C${R(8)}`);
+        ws2.getCell(`B${R(8)}`).font = fontBig;
+        ws2.getCell(`B${R(8)}`).alignment = centerAlign;
+        ws2.getCell(`D${R(8)}`).value = Number(sample.cutNo)||0;
+        ws2.getCell(`D${R(8)}`).font = fontBig;
+        ws2.getCell(`D${R(8)}`).alignment = leftAlign;
+
+        // Row 10: MADE IN EGYPT with thick bottom border
+        ws2.getCell(`A${R(9)}`).value = 'MADE IN EGYPT';
+        ws2.mergeCells(`A${R(9)}:D${R(9)}`);
+        ws2.getCell(`A${R(9)}`).font = fontMed;
+        ws2.getCell(`A${R(9)}`).alignment = topCenter;
+        ['A','B','C','D'].forEach(col => {
+            ws2.getCell(`${col}${R(9)}`).border = thickBottom;
+        });
+
+        // Row heights
+        for (let i = 1; i <= 8; i++) ws2.getRow(R(i)).height = 43.2;
+        ws2.getRow(R(9)).height = 36.6;
+        for (let i = 0; i < SPACER; i++) ws2.getRow(baseRow + BLOCK + i + 1).height = 12;
+
+        // Place icons in column A at rows 4, 5, 6 (0-indexed col 0)
+        // ExcelJS tl uses 0-indexed col/row with fractional offsets
+        ws2.addImage(imgFactory, {
+            tl: { col: 0.15, row: baseRow + 3 + 0.05 },
+            ext: { width: 55, height: 50 }
+        });
+        ws2.addImage(imgEdit, {
+            tl: { col: 0.20, row: baseRow + 4 + 0.05 },
+            ext: { width: 55, height: 50 }
+        });
+        ws2.addImage(imgArrow, {
+            tl: { col: 0.15, row: baseRow + 5 + 0.10 },
+            ext: { width: 70, height: 55 }
+        });
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Label_Report_${new Date().toLocaleDateString('en-GB').replace(/\//g,'-')}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // =============================================
