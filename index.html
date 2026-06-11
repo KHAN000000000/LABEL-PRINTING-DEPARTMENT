@@ -400,6 +400,7 @@
     <button onclick="addData()" class="btn btn-save">✓ SAVE</button>
     <button onclick="resetForm()" class="btn btn-reset">↺ RESET</button>
     <button onclick="exportToExcel()" class="btn btn-excel">⬇ EXCEL</button>
+    <button onclick="appendToExistingExcel()" class="btn btn-excel">➕ ADD TO EXCEL</button>
     <button onclick="importExcel()" class="btn btn-excel" id="importBtn" style="display:none;">⬆ IMPORT EXCEL</button>
     <button onclick="exportToPDF()" class="btn btn-pdf">⬇ PDF</button>
     <button onclick="printSelectedReport()" class="btn btn-print">⎙ PRINT</button>
@@ -1124,6 +1125,75 @@ async function exportToExcel() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+
+// =============================================
+//  APPEND TO EXISTING EXCEL FILE
+// =============================================
+async function appendToExistingExcel() {
+    if (!dataRecords.length) { alert('لا توجد بيانات للإضافة'); return; }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const fmtDate = (iso) => iso ? iso.slice(0,10).split('-').reverse().join('/') : '';
+            const buf = await file.arrayBuffer();
+            const wb = new ExcelJS.Workbook();
+            await wb.xlsx.load(buf);
+
+            // Create a NEW separate sheet with a unique name
+            const baseName = 'Added ' + new Date().toLocaleDateString('en-GB').replace(/\//g,'-');
+            let sheetName = baseName;
+            let i = 2;
+            while (wb.getWorksheet(sheetName)) {
+                sheetName = baseName + ' (' + (i++) + ')';
+            }
+            const ws = wb.addWorksheet(sheetName);
+            ws.columns = [
+                { header:"STYLE NO", key:"styleNo", width:14 },
+                { header:"ERP NO",   key:"erpNo",   width:12 },
+                { header:"LINE",     key:"line",    width:8 },
+                { header:"BATCH",    key:"batch",   width:10 },
+                { header:"CUT NO",   key:"cutNo",   width:10 },
+                { header:"COLOR",    key:"color",   width:16 },
+                { header:"SEASON",   key:"season",  width:10 },
+                { header:"TOTAL",    key:"total",   width:10 },
+                { header:"DATE",     key:"date",    width:12 }
+            ];
+            ws.getRow(1).font = { bold:true };
+
+            // Append new records
+            let sum = 0;
+            dataRecords.forEach(r => {
+                ws.addRow([r.styleNo, r.erpNo, r.line, r.batch, r.cutNo, r.color, r.season, r.total, fmtDate(r.createdAt)]);
+                sum += Number(r.total)||0;
+            });
+            const gt = ws.addRow(['GRAND TOTAL','','','','','','', sum, '']);
+            gt.font = { bold:true };
+
+
+            const outBuf = await wb.xlsx.writeBuffer();
+            const blob = new Blob([outBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name.replace(/\.xlsx$/i,'') + '_updated.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            alert('تمت إضافة البيانات وحفظ الملف الجديد');
+        } catch (err) {
+            console.error(err);
+            alert('خطأ في قراءة/تحديث ملف الإكسيل: ' + err.message);
+        }
+    };
+    input.click();
+}
+
+
 
 // =============================================
 //  PDF EXPORT
