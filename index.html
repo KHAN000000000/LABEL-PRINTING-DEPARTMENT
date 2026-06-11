@@ -11,7 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-
+     <link rel="icon" href="icon-192.png">
     <style>
         :root {
             --navy: #00244d;
@@ -267,6 +267,7 @@
         }
         @media (min-width: 768px) { .chart-card { border-radius: 16px; padding: 22px; } }
         .chart-title { font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; color: var(--navy); margin-bottom: 12px; }
+        .chart-card canvas { width: 100% !important; height: 280px !important; display: block; }
 
         /* ===== PRINT ===== */
         .print-header { display: none; }
@@ -390,6 +391,10 @@
                     <label class="field-label">Total Qty</label>
                     <input type="number" id="total" placeholder="0" class="field-input" inputmode="numeric">
                 </div>
+                <div class="form-field">
+                    <label class="field-label">Date</label>
+                    <input type="date" id="entryDate" class="field-input">
+                </div>
             </div>
             <div class="action-bar">
     <button onclick="addData()" class="btn btn-save">✓ SAVE</button>
@@ -404,9 +409,11 @@
         </div>
 
         <!-- SEARCH -->
-        <div class="search-wrap no-print">
+        <div class="search-wrap no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <span class="search-icon">⌕</span>
-            <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Search by Style, ERP, Line, Color, Season..." class="search-input" autocomplete="off">
+            <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Search by Style, ERP, Line, Color, Season, Date..." class="search-input" autocomplete="off" style="flex:1;min-width:200px;">
+            <input type="date" id="searchDate" onchange="filterTable()" class="search-input" style="max-width:180px;" title="Filter by date">
+            <button type="button" onclick="document.getElementById('searchDate').value=''; filterTable();" class="btn" style="background:#6b7a99;color:#fff;padding:8px 14px;">CLEAR DATE</button>
         </div>
 
         <!-- TABLE -->
@@ -423,7 +430,7 @@
                                 <input type="checkbox" id="selectAllChk" class="row-checkbox" onchange="toggleSelectAll(this)">
                             </th>
                             <th>STYLE</th><th>ERP</th><th>LINE</th><th>BATCH</th>
-                            <th>CUT</th><th>COLOR</th><th>SEASON</th><th>TOTAL</th>
+                            <th>CUT</th><th>COLOR</th><th>SEASON</th><th>TOTAL</th><th>DATE</th>
                             <th class="no-print">EDIT</th>
                         </tr>
                     </thead>
@@ -432,6 +439,7 @@
                         <tr>
                             <td colspan="8" id="totalLabelCell" style="text-align:right;padding-right:16px;letter-spacing:2px;">GRAND TOTAL</td>
                             <td id="grandTotal">0</td>
+                            <td></td>
                             <td class="no-print"></td>
                         </tr>
                     </tfoot>
@@ -703,6 +711,19 @@ async function addData() {
         return; 
     }
 
+    const entryDateVal = document.getElementById('entryDate').value;
+    // Store as local YYYY-MM-DD (noon UTC) to avoid timezone shift
+    let createdAt;
+    if (entryDateVal) {
+        createdAt = new Date(entryDateVal + 'T12:00:00Z').toISOString();
+    } else {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        createdAt = new Date(`${y}-${m}-${d}T12:00:00Z`).toISOString();
+    }
+
     dataRecords.push({
         id:     Date.now(),
         styleNo,
@@ -712,7 +733,8 @@ async function addData() {
         cutNo:  Number(document.getElementById('cutNo').value) || 0,
         color:  document.getElementById('color').value.trim()  || 'N/A',
         season: document.getElementById('season').value.trim() || 'N/A',
-        total:  totalVal
+        total:  totalVal,
+        createdAt
     });
 
     resetForm();
@@ -725,6 +747,16 @@ async function addData() {
 
 function resetForm() {
     document.querySelectorAll('#inputForm input').forEach(i => i.value = '');
+    setTodayDate();
+}
+function setTodayDate() {
+    const el = document.getElementById('entryDate');
+    if (el) {
+        const d = new Date();
+        const m = String(d.getMonth()+1).padStart(2,'0');
+        const day = String(d.getDate()).padStart(2,'0');
+        el.value = `${d.getFullYear()}-${m}-${day}`;
+    }
 }
 
 // =============================================
@@ -736,8 +768,10 @@ function renderTable() {
 
     tbody.innerHTML = dataRecords.map(r => {
         totalSum += r.total;
+        const dateISO = r.createdAt ? r.createdAt.slice(0,10) : '';
+        const dateDisp = dateISO ? dateISO.split('-').reverse().join('/') : '—';
         return `
-        <tr id="row-${r.id}">
+        <tr id="row-${r.id}" data-date="${dateISO}">
             <td class="no-print"><input type="checkbox" class="row-checkbox" data-total="${r.total}"></td>
             <td class="td-style  cell-styleNo">${r.styleNo}</td>
             <td class="cell-erpNo">${r.erpNo}</td>
@@ -747,6 +781,7 @@ function renderTable() {
             <td class="cell-color">${r.color}</td>
             <td class="td-season cell-season">${r.season}</td>
             <td class="td-total  cell-total">${r.total}</td>
+            <td class="cell-date">${dateDisp}</td>
             <td class="no-print">
                 <button onclick="toggleEdit(${r.id})" id="btn-edit-${r.id}" class="btn-edit-row">EDIT</button>
             </td>
@@ -817,9 +852,13 @@ async function deleteSelectedRows() {
 // =============================================
 function filterTable() {
     const q = document.getElementById('searchInput').value.toLowerCase();
+    const dateEl = document.getElementById('searchDate');
+    const dateFilter = dateEl ? dateEl.value : '';
     let filteredTotal = 0, visCount = 0;
     document.querySelectorAll('#tableBody tr').forEach(row => {
-        const show = row.innerText.toLowerCase().includes(q);
+        const textMatch = row.innerText.toLowerCase().includes(q);
+        const dateMatch = !dateFilter || row.getAttribute('data-date') === dateFilter;
+        const show = textMatch && dateMatch;
         row.style.display = show ? '' : 'none';
         if (show) {
             filteredTotal += Number(row.querySelector('.row-checkbox').getAttribute('data-total'));
@@ -866,12 +905,14 @@ const ICON_EDIT_B64    = "iVBORw0KGgoAAAANSUhEUgAAAEcAAAA7CAYAAAApUJelAAAAAXNSR0
 const ICON_FACTORY_B64 = "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";
 
 async function exportToExcel() {
+    const fmtDate = (iso) => iso ? iso.slice(0,10).split('-').reverse().join('/') : '';
     // ── Sheet 1 data with SheetJS for the simple data sheet ──────────────────
     const data = dataRecords.map(r => ({
         "STYLE NO": r.styleNo, "ERP NO": r.erpNo, "LINE": r.line, "BATCH": r.batch,
-        "CUT NO": r.cutNo, "COLOR": r.color, "SEASON": r.season, "TOTAL": r.total
+        "CUT NO": r.cutNo, "COLOR": r.color, "SEASON": r.season, "TOTAL": r.total,
+        "DATE": fmtDate(r.createdAt)
     }));
-    data.push({ "STYLE NO":"GRAND TOTAL","ERP NO":"","LINE":"","BATCH":"","CUT NO":"","COLOR":"","SEASON":"","TOTAL": dataRecords.reduce((s,r)=>s+r.total,0) });
+    data.push({ "STYLE NO":"GRAND TOTAL","ERP NO":"","LINE":"","BATCH":"","CUT NO":"","COLOR":"","SEASON":"","TOTAL": dataRecords.reduce((s,r)=>s+r.total,0), "DATE":"" });
 
     // ── Selected rows ─────────────────────────────────────────────────────────
     const selectedSamples = [];
@@ -919,11 +960,12 @@ async function exportToExcel() {
         { header:"CUT NO",   key:"cutNo",   width:10 },
         { header:"COLOR",    key:"color",   width:16 },
         { header:"SEASON",   key:"season",  width:10 },
-        { header:"TOTAL",    key:"total",   width:10 }
+        { header:"TOTAL",    key:"total",   width:10 },
+        { header:"DATE",     key:"date",    width:12 }
     ];
     data.forEach(d => ws1.addRow({
         styleNo:d["STYLE NO"], erpNo:d["ERP NO"], line:d["LINE"], batch:d["BATCH"],
-        cutNo:d["CUT NO"], color:d["COLOR"], season:d["SEASON"], total:d["TOTAL"]
+        cutNo:d["CUT NO"], color:d["COLOR"], season:d["SEASON"], total:d["TOTAL"], date:d["DATE"]
     }));
     ws1.getRow(1).font = { bold:true };
 
@@ -1027,7 +1069,7 @@ async function exportToExcel() {
         ws2.getCell(`D${R(6)}`).alignment = leftAlign;
 
         // Row 8: style-color
-        ws2.getCell(`A${R(7)}`).value = (sample.styleNo||'') + '-' + (sample.color||'');
+        ws2.getCell(`A${R(7)}`).value = (sample.color||'');
         ws2.mergeCells(`A${R(7)}:D${R(7)}`);
         ws2.getCell(`A${R(7)}`).font = fontBig;
         ws2.getCell(`A${R(7)}`).alignment = centerAlign;
@@ -1052,7 +1094,7 @@ async function exportToExcel() {
 
         // Row heights
         for (let i = 1; i <= 8; i++) ws2.getRow(R(i)).height = 43.2;
-        ws2.getRow(R(9)).height = 36.6;
+        ws2.getRow(R(9)).height = 37.2;
         for (let i = 0; i < SPACER; i++) ws2.getRow(baseRow + BLOCK + i + 1).height = 12;
 
         // Place icons in column A at rows 4, 5, 6 (0-indexed col 0)
@@ -1106,20 +1148,21 @@ function exportToPDF() {
         const cb = row.querySelector('.row-checkbox');
         if (cb && cb.checked) {
             const cells = row.querySelectorAll('td');
-            selData.push([cells[1].innerText,cells[2].innerText,cells[3].innerText,cells[4].innerText,cells[5].innerText,cells[6].innerText,cells[7].innerText,cells[8].innerText]);
+            selData.push([cells[1].innerText,cells[2].innerText,cells[3].innerText,cells[4].innerText,cells[5].innerText,cells[6].innerText,cells[7].innerText,cells[8].innerText,cells[9]?cells[9].innerText:'']);
             selTotal += Number(cells[8].innerText);
         }
     });
     if (!selData.length) { alert('Please select rows first.'); return; }
     selData.push([
         {content:'GRAND TOTAL',colSpan:7,styles:{halign:'right',fontStyle:'bold',fillColor:[238,242,251]}},
-        {content:String(selTotal),styles:{halign:'center',fontStyle:'bold',fillColor:[238,242,251]}}
+        {content:String(selTotal),styles:{halign:'center',fontStyle:'bold',fillColor:[238,242,251]}},
+        {content:'',styles:{fillColor:[238,242,251]}}
     ]);
     const rCount = selData.length;
     const fs = rCount>40?Math.max(5,10-rCount/12):rCount>25?7.5:rCount>15?9:10;
     const cp = rCount>40?0.8:rCount>25?1.2:rCount>15?2:3;
     doc.autoTable({
-        head:[['STYLE NO','ERP NO','LINE','BATCH','CUT NO','COLOR','SEASON','TOTAL']],
+        head:[['STYLE NO','ERP NO','LINE','BATCH','CUT NO','COLOR','SEASON','TOTAL','DATE']],
         body:selData, startY:38, theme:'grid',
         styles:{fontSize:fs,halign:'center',cellPadding:cp,valign:'middle'},
         headStyles:{fillColor:[0,36,77],textColor:[255,255,255],fontSize:Math.max(fs,8)},
@@ -1223,26 +1266,48 @@ function importExcel() {
 function initCharts() {
     const c1 = document.getElementById('cutNoChart').getContext('2d');
     const c2 = document.getElementById('totalQtyChart').getContext('2d');
+    const commonOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+        scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 } },
+            x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } }
+        }
+    };
     cutNoChart = new Chart(c1, {
         type:'bar',
         data:{labels:[],datasets:[{label:'Cut No',data:[],backgroundColor:'rgba(0,65,122,0.85)',borderRadius:5}]},
-        options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
+        options: commonOpts
     });
     totalQtyChart = new Chart(c2, {
-        type:'line',
-        data:{labels:[],datasets:[{label:'Total Qty',data:[],borderColor:'#d92b3a',backgroundColor:'rgba(217,43,58,0.08)',fill:true,tension:0.4,pointBackgroundColor:'#d92b3a'}]},
-        options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
+        type:'bar',
+        data:{labels:[],datasets:[{label:'Total Qty',data:[],backgroundColor:'rgba(217,43,58,0.85)',borderRadius:5}]},
+        options: commonOpts
     });
     updateCharts();
 }
 
+function aggregateBy(records, keyFn, valFn) {
+    const map = new Map();
+    records.forEach(r => {
+        const k = keyFn(r) || 'N/A';
+        map.set(k, (map.get(k) || 0) + (Number(valFn(r)) || 0));
+    });
+    return Array.from(map.entries()).sort((a,b) => b[1]-a[1]);
+}
+
 function updateCharts() {
     if (!cutNoChart) return;
-    cutNoChart.data.labels             = dataRecords.map(r=>r.line);
-    cutNoChart.data.datasets[0].data   = dataRecords.map(r=>r.cutNo);
+    // CUT NO PER LINE  →  sum of cutNo grouped by line
+    const byLine = aggregateBy(dataRecords, r => r.line, r => r.cutNo);
+    cutNoChart.data.labels           = byLine.map(e => e[0]);
+    cutNoChart.data.datasets[0].data = byLine.map(e => e[1]);
     cutNoChart.update();
-    totalQtyChart.data.labels           = dataRecords.map(r=>r.styleNo);
-    totalQtyChart.data.datasets[0].data = dataRecords.map(r=>r.total);
+    // TOTAL QUANTITY BY STYLE  →  sum of total grouped by styleNo
+    const byStyle = aggregateBy(dataRecords, r => r.styleNo, r => r.total);
+    totalQtyChart.data.labels           = byStyle.map(e => e[0]);
+    totalQtyChart.data.datasets[0].data = byStyle.map(e => e[1]);
     totalQtyChart.update();
 }
 
@@ -1250,6 +1315,7 @@ function updateCharts() {
 //  INIT
 // =============================================
 window.onload = async () => {
+    setTodayDate();
     if (sessionStorage.getItem('gii_auth') === 'true') await showSystem();
 };
 document.getElementById('passInput').addEventListener('keypress', e => { if(e.key==='Enter') checkPassword(); });
