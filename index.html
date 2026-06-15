@@ -477,6 +477,10 @@
 const JSONSTORAGE_API_KEY = '385e6b06-73f1-4997-8b64-58486e986731';
 const JSONSTORAGE_BASE    = 'https://api.jsonstorage.net/v1/json';
 
+// ✅ الـ URL الثابت المشترك بين كل الأجهزة
+// بعد أول تشغيل، هيظهرلك الـ URL — ابعته لنا نحطه هنا
+const SHARED_URL = null; // ← هيتعبى بعد أول تشغيل
+
 // =============================================
 //  APP STATE
 // =============================================
@@ -506,11 +510,10 @@ let cutNoChart, totalQtyChart;
 let syncInterval  = null;
 let lastVersion   = null;
 let isSaving      = false;
-// الـ URL الثابت — بيتعمل مرة وبعدين بيتحفظ
-let storageUrl = 'https://api.jsonstorage.net/v1/json/385e6b06-73f1-4997-8b64-58486e986731/gii-label-db';
-// fallback: لو في URL محفوظ من قبل، استخدمه
-const _saved = localStorage.getItem('gii_storage_url');
-if (_saved && _saved.startsWith('https://api.jsonstorage.net')) storageUrl = _saved;
+// الـ URL المشترك — SHARED_URL أولوية قصوى
+let storageUrl = SHARED_URL
+    || localStorage.getItem('gii_storage_url')
+    || null;
 
 // =============================================
 //  JSONStorage.net HELPERS
@@ -541,27 +544,67 @@ async function binWrite(payload) {
 }
 
 async function initStorage() {
-    // حاول اقرأ أول — لو الـ bin موجود تمام
-    try {
-        const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`);
-        if (res.ok) {
-            localStorage.setItem('gii_storage_url', storageUrl);
-            return true;
-        }
-    } catch(e) {}
+    // لو عندنا URL شغال، اختبره
+    if (storageUrl) {
+        try {
+            const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`);
+            if (res.ok) {
+                localStorage.setItem('gii_storage_url', storageUrl);
+                return true;
+            }
+        } catch(e) {}
+    }
 
-    // لو مش موجود، عمله جديد
+    // إنشاء bin جديد لأول مرة
     try {
         const res = await fetch(`${JSONSTORAGE_BASE}?apiKey=${JSONSTORAGE_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ records: [], history: [] })
         });
-        if (!res.ok) throw new Error('Create failed');
+        if (!res.ok) throw new Error('Create failed: ' + res.status);
         const json = await res.json();
-        storageUrl = json.uri || json.url || storageUrl;
+        storageUrl = json.uri || json.url;
+        if (!storageUrl) throw new Error('No URL returned');
+
         localStorage.setItem('gii_storage_url', storageUrl);
-        console.log('✅ Storage ready:', storageUrl);
+        console.log('✅ Bin created:', storageUrl);
+
+        // ⚠️ أهم خطوة — عرض الـ URL للمدير
+        setTimeout(() => {
+            const box = document.createElement('div');
+            box.style.cssText = `
+                position:fixed;top:0;left:0;right:0;bottom:0;
+                background:rgba(0,0,0,0.85);z-index:99999;
+                display:flex;align-items:center;justify-content:center;
+            `;
+            box.innerHTML = `
+                <div style="background:#1a2235;border:2px solid #f0a500;border-radius:12px;padding:32px;max-width:520px;width:90%;text-align:center;">
+                    <div style="font-size:32px;margin-bottom:12px;">🎉</div>
+                    <div style="color:#f0a500;font-size:16px;font-weight:bold;margin-bottom:8px;">تم إنشاء قاعدة البيانات!</div>
+                    <div style="color:#aaa;font-size:13px;margin-bottom:16px;">انسخ الرابط التالي وأرسله لنا مرة واحدة فقط عشان نثبته في كل الأجهزة</div>
+                    <div style="background:#0d1626;border:1px solid #f0a500;border-radius:8px;padding:12px;margin-bottom:16px;">
+                        <input id="shareUrlInput" value="${storageUrl}" readonly
+                            style="width:100%;background:transparent;border:none;color:#fff;font-size:11px;text-align:center;outline:none;">
+                    </div>
+                    <button onclick="
+                        document.getElementById('shareUrlInput').select();
+                        document.execCommand('copy');
+                        this.innerText='✅ تم النسخ!';
+                        setTimeout(()=>this.innerText='📋 انسخ الرابط',2000);
+                    " style="background:#f0a500;color:#000;border:none;border-radius:8px;padding:10px 24px;font-weight:bold;cursor:pointer;margin-bottom:12px;">
+                        📋 انسخ الرابط
+                    </button>
+                    <br>
+                    <button onclick="this.closest('div[style]').remove()"
+                        style="background:transparent;color:#aaa;border:1px solid #aaa;border-radius:8px;padding:8px 20px;cursor:pointer;margin-top:8px;">
+                        حسناً
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(box);
+        }, 800);
+
         return true;
     } catch(e) {
         console.error('initStorage failed:', e);
