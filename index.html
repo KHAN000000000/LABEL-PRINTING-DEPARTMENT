@@ -472,10 +472,10 @@
 
 <script>
 // =============================================
-//  NPOINT.IO CONFIG
+//  MOCKAPI.IO CONFIG
 // =============================================
-const NPOINT_ID = 'f69579a611d67c6f2ccc';
-const NPOINT_URL = `https://api.npoint.io/${NPOINT_ID}`;
+const MOCKAPI_BASE = 'https://6a302e8ba7f8866418d5b93e.mockapi.io/LABEL';
+const MOCKAPI_URL  = `${MOCKAPI_BASE}/1`;
 
 // =============================================
 //  APP STATE
@@ -519,17 +519,32 @@ function setSyncState(state, msg) {
 }
 
 async function binRead() {
-    const res = await fetch(NPOINT_URL);
+    const res = await fetch(MOCKAPI_URL);
+    if (res.status === 404) {
+        // إذا لم يكن السجل موجوداً بعد، نرجع كائن فارغ بدلاً من الخطأ
+        return { records: [], history: [] };
+    }
     if (!res.ok) throw new Error(`Read failed: ${res.status}`);
     return await res.json();
 }
 
 async function binWrite(payload) {
-    const res = await fetch(NPOINT_URL, {
-        method: 'POST',
+    // نحاول التحديث أولاً (PUT)
+    let res = await fetch(MOCKAPI_URL, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     });
+    
+    // إذا كان السجل غير موجود (404)، نقوم بإنشائه لأول مرة (POST)
+    if (res.status === 404) {
+        res = await fetch(MOCKAPI_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, id: "1" })
+        });
+    }
+
     if (!res.ok) throw new Error(`Write failed: ${res.status}`);
     return await res.json();
 }
@@ -540,14 +555,14 @@ async function binWrite(payload) {
 async function fetchData() {
     setSyncState('syncing', 'SYNCING...');
     try {
-        const record = await binRead(); // npoint returns the record directly
+        const record = await binRead();
         dataRecords   = (record.records  || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
         reportHistory = record.history   || [];
         setSyncState('synced', 'LIVE ✓');
         // Also cache locally as fallback
         localStorage.setItem('gii_label_cache', JSON.stringify({ records: dataRecords, history: reportHistory }));
     } catch(e) {
-        console.warn('NPoint read failed, using local cache:', e.message);
+        console.warn('MockAPI read failed, using local cache:', e.message);
         setSyncState('error', 'OFFLINE');
         const cache = JSON.parse(localStorage.getItem('gii_label_cache') || '{}');
         dataRecords   = (cache.records  || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
@@ -566,7 +581,7 @@ async function pushData() {
         await binWrite(payload);
         setSyncState('synced', 'SAVED ✓');
     } catch(e) {
-        console.warn('NPoint write failed:', e.message);
+        console.warn('MockAPI write failed:', e.message);
         setSyncState('error', 'SAVE FAILED');
     } finally {
         isSaving = false;
@@ -577,7 +592,7 @@ async function pushData() {
 async function autoSync() {
     if (isSaving) return; // don't conflict with a live save
     try {
-        const record = await binRead(); // npoint returns the record directly
+        const record = await binRead();
         const incoming = (record.records || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
         // Compare lengths + last id as a cheap diff check
         const myKey  = dataRecords.map(r=>r.id).join(',');
