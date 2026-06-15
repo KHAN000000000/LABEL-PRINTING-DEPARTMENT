@@ -477,10 +477,6 @@
 const JSONSTORAGE_API_KEY = '385e6b06-73f1-4997-8b64-58486e986731';
 const JSONSTORAGE_BASE    = 'https://api.jsonstorage.net/v1/json';
 
-// ✅ الـ URL الثابت المشترك بين كل الأجهزة
-// بعد أول تشغيل، هيظهرلك الـ URL — ابعته لنا نحطه هنا
-const SHARED_URL = null; // ← هيتعبى بعد أول تشغيل
-
 // =============================================
 //  APP STATE
 // =============================================
@@ -510,10 +506,9 @@ let cutNoChart, totalQtyChart;
 let syncInterval  = null;
 let lastVersion   = null;
 let isSaving      = false;
-// الـ URL المشترك — SHARED_URL أولوية قصوى
-let storageUrl = SHARED_URL
-    || localStorage.getItem('gii_storage_url')
-    || null;
+// ✅ الـ URL الثابت المشترك بين كل الأجهزة
+const SHARED_STORAGE_URL = 'https://api.jsonstorage.net/v1/json/516a61dd-ab1d-4e37-a1f1-c556c81bce10/fbaf727d-94da-491a-9071-925ace6941ea';
+let storageUrl = SHARED_STORAGE_URL;
 
 // =============================================
 //  JSONStorage.net HELPERS
@@ -527,11 +522,6 @@ function setSyncState(state, msg) {
     text.innerText = msg;
 }
 
-fetch('https://api.jsonstorage.net/v1/json?apiKey=385e6b06-73f1-4997-8b64-58486e986731', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({records:[], history:[]})
-}).then(r=>r.json()).then(j=>console.log('URL:', j.uri || j.url || JSON.stringify(j)))
 async function binRead() {
     const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`);
     if (!res.ok) throw new Error(`Read failed: ${res.status}`);
@@ -549,70 +539,13 @@ async function binWrite(payload) {
 }
 
 async function initStorage() {
-    // لو عندنا URL شغال، اختبره
-    if (storageUrl) {
-        try {
-            const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`);
-            if (res.ok) {
-                localStorage.setItem('gii_storage_url', storageUrl);
-                return true;
-            }
-        } catch(e) {}
-    }
-
-    // إنشاء bin جديد لأول مرة
+    // الـ URL ثابت — بس نتأكد إنه شغال
     try {
-        const res = await fetch(`${JSONSTORAGE_BASE}?apiKey=${JSONSTORAGE_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ records: [], history: [] })
-        });
-        if (!res.ok) throw new Error('Create failed: ' + res.status);
-        const json = await res.json();
-        storageUrl = json.uri || json.url;
-        if (!storageUrl) throw new Error('No URL returned');
-
-        localStorage.setItem('gii_storage_url', storageUrl);
-        console.log('✅ Bin created:', storageUrl);
-
-        // ⚠️ أهم خطوة — عرض الـ URL للمدير
-        setTimeout(() => {
-            const box = document.createElement('div');
-            box.style.cssText = `
-                position:fixed;top:0;left:0;right:0;bottom:0;
-                background:rgba(0,0,0,0.85);z-index:99999;
-                display:flex;align-items:center;justify-content:center;
-            `;
-            box.innerHTML = `
-                <div style="background:#1a2235;border:2px solid #f0a500;border-radius:12px;padding:32px;max-width:520px;width:90%;text-align:center;">
-                    <div style="font-size:32px;margin-bottom:12px;">🎉</div>
-                    <div style="color:#f0a500;font-size:16px;font-weight:bold;margin-bottom:8px;">تم إنشاء قاعدة البيانات!</div>
-                    <div style="color:#aaa;font-size:13px;margin-bottom:16px;">انسخ الرابط التالي وأرسله لنا مرة واحدة فقط عشان نثبته في كل الأجهزة</div>
-                    <div style="background:#0d1626;border:1px solid #f0a500;border-radius:8px;padding:12px;margin-bottom:16px;">
-                        <input id="shareUrlInput" value="${storageUrl}" readonly
-                            style="width:100%;background:transparent;border:none;color:#fff;font-size:11px;text-align:center;outline:none;">
-                    </div>
-                    <button onclick="
-                        document.getElementById('shareUrlInput').select();
-                        document.execCommand('copy');
-                        this.innerText='✅ تم النسخ!';
-                        setTimeout(()=>this.innerText='📋 انسخ الرابط',2000);
-                    " style="background:#f0a500;color:#000;border:none;border-radius:8px;padding:10px 24px;font-weight:bold;cursor:pointer;margin-bottom:12px;">
-                        📋 انسخ الرابط
-                    </button>
-                    <br>
-                    <button onclick="this.closest('div[style]').remove()"
-                        style="background:transparent;color:#aaa;border:1px solid #aaa;border-radius:8px;padding:8px 20px;cursor:pointer;margin-top:8px;">
-                        حسناً
-                    </button>
-                </div>
-            `;
-            document.body.appendChild(box);
-        }, 800);
-
-        return true;
+        const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`);
+        if (res.ok) return true;
+        throw new Error(`Status: ${res.status}`);
     } catch(e) {
-        console.error('initStorage failed:', e);
+        console.error('Storage check failed:', e);
         return false;
     }
 }
