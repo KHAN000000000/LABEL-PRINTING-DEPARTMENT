@@ -472,12 +472,10 @@
 
 <script>
 // =============================================
-//  JSONBin.io CONFIG
+//  JSONStorage.net CONFIG
 // =============================================
-const JSONBIN_BIN_ID  = '6a255204da38895dfe946e80';
-const JSONBIN_MASTER  = '$2a$10$/I31YrSkp.7CETSdPJCJY.fEWcfXOV67tke8UEoDUhcsN1eSmO/pe';
-const JSONBIN_ACCESS  = null;   // No Access Key — Master Key only
-const JSONBIN_BASE    = 'https://api.jsonbin.io/v3/b';
+const JSONSTORAGE_API_KEY = '385e6b06-73f1-4997-8b64-58486e986731';
+const JSONSTORAGE_BASE    = 'https://api.jsonstorage.net/v1/json';
 
 // =============================================
 //  APP STATE
@@ -506,11 +504,16 @@ let dataRecords   = [];
 let reportHistory = [];
 let cutNoChart, totalQtyChart;
 let syncInterval  = null;
-let lastVersion   = null;   // JSONBin version tracking (avoids unnecessary writes)
+let lastVersion   = null;
 let isSaving      = false;
+// الـ URL الثابت — بيتعمل مرة وبعدين بيتحفظ
+let storageUrl = 'https://api.jsonstorage.net/v1/json/385e6b06-73f1-4997-8b64-58486e986731/gii-label-db';
+// fallback: لو في URL محفوظ من قبل، استخدمه
+const _saved = localStorage.getItem('gii_storage_url');
+if (_saved && _saved.startsWith('https://api.jsonstorage.net')) storageUrl = _saved;
 
 // =============================================
-//  JSONBIN HELPERS
+//  JSONStorage.net HELPERS
 // =============================================
 function setSyncState(state, msg) {
     const badge = document.getElementById('syncBadge');
@@ -522,27 +525,48 @@ function setSyncState(state, msg) {
 }
 
 async function binRead() {
-    const headers = { 'X-Master-Key': JSONBIN_MASTER };
-    if (JSONBIN_ACCESS) headers['X-Access-Key'] = JSONBIN_ACCESS;
-    const res = await fetch(`${JSONBIN_BASE}/${JSONBIN_BIN_ID}/latest`, { headers });
+    const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`);
     if (!res.ok) throw new Error(`Read failed: ${res.status}`);
-    const json = await res.json();
-    lastVersion = json.metadata?.version ?? null;
-    return json.record;
+    return await res.json();
 }
 
 async function binWrite(payload) {
-    const headers = { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_MASTER };
-    if (JSONBIN_ACCESS) headers['X-Access-Key'] = JSONBIN_ACCESS;
-    const res = await fetch(`${JSONBIN_BASE}/${JSONBIN_BIN_ID}`, {
+    const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`, {
         method: 'PUT',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error(`Write failed: ${res.status}`);
-    const json = await res.json();
-    lastVersion = json.metadata?.version ?? null;
-    return json;
+    return await res.json();
+}
+
+async function initStorage() {
+    // حاول اقرأ أول — لو الـ bin موجود تمام
+    try {
+        const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`);
+        if (res.ok) {
+            localStorage.setItem('gii_storage_url', storageUrl);
+            return true;
+        }
+    } catch(e) {}
+
+    // لو مش موجود، عمله جديد
+    try {
+        const res = await fetch(`${JSONSTORAGE_BASE}?apiKey=${JSONSTORAGE_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ records: [], history: [] })
+        });
+        if (!res.ok) throw new Error('Create failed');
+        const json = await res.json();
+        storageUrl = json.uri || json.url || storageUrl;
+        localStorage.setItem('gii_storage_url', storageUrl);
+        console.log('✅ Storage ready:', storageUrl);
+        return true;
+    } catch(e) {
+        console.error('initStorage failed:', e);
+        return false;
+    }
 }
 
 // =============================================
@@ -550,15 +574,22 @@ async function binWrite(payload) {
 // =============================================
 async function fetchData() {
     setSyncState('syncing', 'SYNCING...');
+    const ready = await initStorage();
+    if (!ready) {
+        setSyncState('error', 'OFFLINE');
+        const cache = JSON.parse(localStorage.getItem('gii_label_cache') || '{}');
+        dataRecords   = (cache.records  || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
+        reportHistory = cache.history   || [];
+        return;
+    }
     try {
         const record = await binRead();
         dataRecords   = (record.records  || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
         reportHistory = record.history   || [];
         setSyncState('synced', 'LIVE ✓');
-        // Also cache locally as fallback
         localStorage.setItem('gii_label_cache', JSON.stringify({ records: dataRecords, history: reportHistory }));
     } catch(e) {
-        console.warn('JSONBin read failed, using local cache:', e.message);
+        console.warn('Read failed, using local cache:', e.message);
         setSyncState('error', 'OFFLINE');
         const cache = JSON.parse(localStorage.getItem('gii_label_cache') || '{}');
         dataRecords   = (cache.records  || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
@@ -571,13 +602,12 @@ async function pushData() {
     isSaving = true;
     setSyncState('syncing', 'SAVING...');
     const payload = { records: dataRecords, history: reportHistory };
-    // Always update local cache immediately
     localStorage.setItem('gii_label_cache', JSON.stringify(payload));
     try {
         await binWrite(payload);
         setSyncState('synced', 'SAVED ✓');
     } catch(e) {
-        console.warn('JSONBin write failed:', e.message);
+        console.warn('Write failed:', e.message);
         setSyncState('error', 'SAVE FAILED');
     } finally {
         isSaving = false;
@@ -586,11 +616,10 @@ async function pushData() {
 
 // Auto-sync: poll every 4 seconds, only re-render if data changed
 async function autoSync() {
-    if (isSaving) return; // don't conflict with a live save
+    if (isSaving) return;
     try {
         const record = await binRead();
         const incoming = (record.records || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
-        // Compare lengths + last id as a cheap diff check
         const myKey  = dataRecords.map(r=>r.id).join(',');
         const newKey = incoming.map(r=>r.id).join(',');
         if (myKey !== newKey) {
