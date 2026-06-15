@@ -477,9 +477,9 @@
 const JSONSTORAGE_API_KEY = '385e6b06-73f1-4997-8b64-58486e986731';
 const JSONSTORAGE_BASE    = 'https://api.jsonstorage.net/v1/json';
 
-// ✅ استخدم الرابط المشترك الخاص بك هنا
-// هذا سيجعل البيانات تظهر لجميع الأجهزة التي تستخدم نفس الرابط
-const SHARED_URL = 'https://api.npoint.io/f69579a611d67c6f2ccc';
+// ✅ اترك هذا فارغاً أو ضع رابط jsonstorage.net قابل للكتابة.
+// روابط npoint.io عامة للقراءة فقط، ولذلك قد تظهر لك رسالة FAILD عند الحفظ.
+const SHARED_URL = null;
 const SYNC_POLL_MS = 1000;
 
 // =============================================
@@ -552,7 +552,23 @@ async function binWrite(payload) {
     return await res.json();
 }
 
+function normalizeRemoteData(record) {
+    if (!record) return { records: [], history: [] };
+    if (Array.isArray(record)) return { records: record, history: [] };
+
+    const records = record.records || record.pos || record.data || record.items || [];
+    const history = record.history || record.histories || [];
+    return { records, history };
+}
+
 async function initStorage() {
+    // إذا كان رابط التخزين من npoint فاعتبره غير قابل للكتابة
+    if (storageUrl?.includes('npoint.io')) {
+        console.warn('Detected npoint storage URL. npoint.io is read-only for this app. Replacing with writable jsonstorage.net bin.');
+        localStorage.removeItem('gii_storage_url');
+        storageUrl = null;
+    }
+
     // لو عندنا URL شغال، اختبره
     if (storageUrl) {
         try {
@@ -636,8 +652,9 @@ async function fetchData() {
     }
     try {
         const record = await binRead();
-        dataRecords   = (record.records  || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
-        reportHistory = record.history   || [];
+        const normalized = normalizeRemoteData(record);
+        dataRecords   = (normalized.records || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
+        reportHistory = normalized.history || [];
         setSyncState('synced', 'LIVE ✓');
         localStorage.setItem('gii_label_cache', JSON.stringify({ records: dataRecords, history: reportHistory }));
     } catch(e) {
@@ -671,12 +688,13 @@ async function autoSync() {
     if (isSaving) return;
     try {
         const record = await binRead();
-        const incoming = (record.records || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
+        const normalized = normalizeRemoteData(record);
+        const incoming = (normalized.records || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
         const myKey  = dataRecords.map(r=>r.id).join(',');
         const newKey = incoming.map(r=>r.id).join(',');
         if (myKey !== newKey) {
             dataRecords   = incoming;
-            reportHistory = record.history || [];
+            reportHistory = normalized.history || [];
             renderTable();
             updateCharts();
             localStorage.setItem('gii_label_cache', JSON.stringify({ records: dataRecords, history: reportHistory }));
@@ -1637,9 +1655,15 @@ function importExcel() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.xlsx, .xls';
-    input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+    input.style.display = 'none';
+    input.multiple = false;
+
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) {
+            document.body.removeChild(input);
+            return;
+        }
 
         const reader = new FileReader();
         reader.onload = async function(ev) {
@@ -1651,21 +1675,22 @@ function importExcel() {
                 const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
                 let importedCount = 0;
+                const now = Date.now();
 
-                jsonData.forEach(row => {
-                    const styleNo = (row["STYLE NO"] || row["Style No"] || row["STYLE"] || "").toString().trim();
+                jsonData.forEach((row, index) => {
+                    const styleNo = (row["STYLE NO"] || row["Style No"] || row["STYLE"] || row["Style"] || "").toString().trim();
                     if (!styleNo) return;
 
                     const record = {
-                        id: Date.now() + importedCount,
+                        id: now + index,
                         styleNo: styleNo,
-                        erpNo: (row["ERP NO"] || row["ERP"] || "N/A").toString().trim(),
+                        erpNo: (row["ERP NO"] || row["ERP"] || row["Erp"] || "N/A").toString().trim(),
                         line: (row["LINE"] || row["Line"] || "N/A").toString().trim(),
                         batch: (row["BATCH"] || row["Batch"] || "N/A").toString().trim(),
-                        cutNo: parseInt(row["CUT NO"] || row["CUT"] || row["Cut No"] || 0),
+                        cutNo: parseInt(row["CUT NO"] || row["CUT"] || row["Cut No"] || 0) || 0,
                         color: (row["COLOR"] || row["Color"] || "N/A").toString().trim(),
                         season: (row["SEASON"] || row["Season"] || "N/A").toString().trim(),
-                        total: parseInt(row["TOTAL"] || row["Total Qty"] || row["TOTAL QTY"] || 0)
+                        total: parseInt(row["TOTAL"] || row["Total Qty"] || row["TOTAL QTY"] || row["Total"] || 0) || 0
                     };
 
                     if (record.total > 0) {
@@ -1683,14 +1708,17 @@ function importExcel() {
                 } else {
                     alert("⚠ لم يتم العثور على بيانات صالحة في الملف");
                 }
-
             } catch (err) {
                 console.error(err);
                 alert("❌ حدث خطأ أثناء قراءة الملف");
+            } finally {
+                document.body.removeChild(input);
             }
         };
         reader.readAsArrayBuffer(file);
-    };
+    });
+
+    document.body.appendChild(input);
     input.click();
 }
 
