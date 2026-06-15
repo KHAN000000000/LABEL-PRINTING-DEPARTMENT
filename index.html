@@ -527,6 +527,11 @@ function setSyncState(state, msg) {
     text.innerText = msg;
 }
 
+fetch('https://api.jsonstorage.net/v1/json?apiKey=385e6b06-73f1-4997-8b64-58486e986731', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({records:[], history:[]})
+}).then(r=>r.json()).then(j=>console.log('URL:', j.uri || j.url || JSON.stringify(j)))
 async function binRead() {
     const res = await fetch(`${storageUrl}?apiKey=${JSONSTORAGE_API_KEY}`);
     if (!res.ok) throw new Error(`Read failed: ${res.status}`);
