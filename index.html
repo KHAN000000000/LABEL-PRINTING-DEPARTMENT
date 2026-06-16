@@ -11,6 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
      <link rel="icon" href="icon-192.png">
     <style>
@@ -298,6 +299,28 @@
             .sig-box { text-align: center; border-top: 1.5pt solid black; width: 38%; padding-top: 5px; font-family: 'Syne', sans-serif; font-weight: bold; font-size: 9pt; }
             canvas { display: none !important; }
         }
+
+        /* ===== NOTIFICATION TOAST ===== */
+        #notificationToast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--navy);
+            color: white;
+            padding: 14px 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10000;
+            transform: translateY(150%);
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            border-left: 5px solid var(--gold);
+        }
+        #notificationToast.show { transform: translateY(0); }
+        .toast-icon { font-size: 1.25rem; }
+        .toast-msg { font-size: 13px; font-weight: 600; font-family: 'Syne', sans-serif; letter-spacing: 0.5px; }
     </style>
 </head>
 <body>
@@ -470,12 +493,23 @@
     </div>
 </div>
 
+<!-- Notification Toast -->
+<div id="notificationToast">
+    <span class="toast-icon">🔔</span>
+    <span class="toast-msg" id="toastMsg">تم تحديث البيانات من قبل مستخدم آخر</span>
+</div>
+
 <script>
 // =============================================
-//  MOCKAPI.IO CONFIG
+//  SUPABASE CONFIG
 // =============================================
-const MOCKAPI_BASE = 'https://6a302e8ba7f8866418d5b93e.mockapi.io/LABEL';
-const MOCKAPI_URL  = `${MOCKAPI_BASE}/1`;
+const SUPABASE_URL = 'https://owaaedxxdhqwoqdkwwmj.supabase.co';
+// IMPORTANT: use the PUBLISHABLE key on the client. Never put the secret key here.
+const SUPABASE_KEY = 'sb_publishable_YiqqFAYaSn1hlXHBmkffdg_7K-5O8aH';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Single shared row that holds the whole app state (records + history)
+const STATE_TABLE = 'app_state';
+const STATE_ID    = 1;
 
 // =============================================
 //  APP STATE
@@ -503,11 +537,12 @@ let currentUser = null;
 let dataRecords   = [];
 let reportHistory = [];
 let cutNoChart, totalQtyChart;
-let syncInterval  = null;
-let isSaving      = false;
+let syncInterval    = null;
+let realtimeChannel = null; // Supabase Realtime subscription
+let isSaving        = false;
 
 // =============================================
-//  JSONBIN HELPERS
+//  SUPABASE HELPERS
 // =============================================
 function setSyncState(state, msg) {
     const badge = document.getElementById('syncBadge');
@@ -518,35 +553,32 @@ function setSyncState(state, msg) {
     text.innerText = msg;
 }
 
+// Read the single shared state row { records, history }
 async function binRead() {
-    const res = await fetch(MOCKAPI_URL);
-    if (res.status === 404) {
-        // إذا لم يكن السجل موجوداً بعد، نرجع كائن فارغ بدلاً من الخطأ
-        return { records: [], history: [] };
-    }
-    if (!res.ok) throw new Error(`Read failed: ${res.status}`);
-    return await res.json();
+    const { data, error } = await _supabase
+        .from(STATE_TABLE)
+        .select('records, history')
+        .eq('id', STATE_ID)
+        .maybeSingle();
+    if (error) throw new Error(`Read failed: ${error.message}`);
+    return {
+        records: (data && data.records)  || [],
+        history: (data && data.history)  || []
+    };
 }
 
+// Upsert the whole app state into the single shared row
 async function binWrite(payload) {
-    // نحاول التحديث أولاً (PUT)
-    let res = await fetch(MOCKAPI_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-    
-    // إذا كان السجل غير موجود (404)، نقوم بإنشائه لأول مرة (POST)
-    if (res.status === 404) {
-        res = await fetch(MOCKAPI_BASE, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...payload, id: "1" })
-        });
-    }
-
-    if (!res.ok) throw new Error(`Write failed: ${res.status}`);
-    return await res.json();
+    const { error } = await _supabase
+        .from(STATE_TABLE)
+        .upsert({
+            id:         STATE_ID,
+            records:    payload.records,
+            history:    payload.history,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+    if (error) throw new Error(`Write failed: ${error.message}`);
+    return true;
 }
 
 // =============================================
@@ -562,11 +594,13 @@ async function fetchData() {
         // Also cache locally as fallback
         localStorage.setItem('gii_label_cache', JSON.stringify({ records: dataRecords, history: reportHistory }));
     } catch(e) {
-        console.warn('MockAPI read failed, using local cache:', e.message);
+        console.warn('Supabase read failed, using local cache:', e.message);
         setSyncState('error', 'OFFLINE');
         const cache = JSON.parse(localStorage.getItem('gii_label_cache') || '{}');
         dataRecords   = (cache.records  || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
         reportHistory = cache.history   || [];
+        renderTable();
+        updateCharts();
     }
 }
 
@@ -581,29 +615,57 @@ async function pushData() {
         await binWrite(payload);
         setSyncState('synced', 'SAVED ✓');
     } catch(e) {
-        console.warn('MockAPI write failed:', e.message);
+        console.warn('Supabase write failed:', e.message);
         setSyncState('error', 'SAVE FAILED');
     } finally {
         isSaving = false;
     }
 }
 
-// Auto-sync: poll every 4 seconds, only re-render if data changed
+// Apply incoming shared state (from realtime or poll) only if it changed locally
+function applyIncoming(record) {
+    if (!record) return;
+    const incoming = (record.records || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
+    const myKey  = dataRecords.map(r => r.id).join(',');
+    const newKey = incoming.map(r => r.id).join(',');
+    const histChanged = JSON.stringify(reportHistory) !== JSON.stringify(record.history || []);
+    if (myKey !== newKey || histChanged) {
+        dataRecords   = incoming;
+        reportHistory = record.history || [];
+        renderTable();
+        updateCharts();
+        localStorage.setItem('gii_label_cache', JSON.stringify({ records: dataRecords, history: reportHistory }));
+    }
+}
+
+// Realtime: instantly receive changes pushed by other devices
+function startRealtime() {
+    if (realtimeChannel) return;
+    realtimeChannel = _supabase
+        .channel('app_state_changes')
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: STATE_TABLE, filter: `id=eq.${STATE_ID}` },
+            (payload) => {
+                if (isSaving) return; // don't clobber our own in-flight save
+                applyIncoming(payload.new);
+                setSyncState('synced', 'LIVE ✓');
+            })
+        .subscribe();
+}
+
+function stopRealtime() {
+    if (realtimeChannel) {
+        _supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+    }
+}
+
+// Fallback poll (in case a realtime event is missed) — only re-render if data changed
 async function autoSync() {
     if (isSaving) return; // don't conflict with a live save
     try {
         const record = await binRead();
-        const incoming = (record.records || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
-        // Compare lengths + last id as a cheap diff check
-        const myKey  = dataRecords.map(r=>r.id).join(',');
-        const newKey = incoming.map(r=>r.id).join(',');
-        if (myKey !== newKey) {
-            dataRecords   = incoming;
-            reportHistory = record.history || [];
-            renderTable();
-            updateCharts();
-            localStorage.setItem('gii_label_cache', JSON.stringify({ records: dataRecords, history: reportHistory }));
-        }
+        applyIncoming(record);
         setSyncState('synced', 'LIVE ✓');
     } catch(e) {
         setSyncState('error', 'OFFLINE');
@@ -635,7 +697,11 @@ async function showSystem() {
     const savedUser = sessionStorage.getItem('gii_user');
     if (savedUser) currentUser = JSON.parse(savedUser);
 
-    await fetchData();
+    // تحميل البيانات من التخزين المحلي فوراً لضمان سرعة الاستجابة
+    const cache = JSON.parse(localStorage.getItem('gii_label_cache') || '{}');
+    dataRecords   = (cache.records  || []).filter(r => r.styleNo && r.styleNo !== 'N/A' && r.total > 0);
+    reportHistory = cache.history   || [];
+
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('mainContent').style.display = 'block';
 
@@ -649,9 +715,15 @@ async function showSystem() {
     renderTable();
     initCharts();
     applyUserPermissions();     // ← مهم جدًا
-    syncInterval = setInterval(autoSync, 4000);
 
-    applyUserPermissions();   // ← مهم جدًا
+    // بدء جلب البيانات من السيرفر في الخلفية لتحديث البيانات المحلية
+    fetchData();
+
+    // مزامنة لحظية بين كل الأجهزة عبر Supabase Realtime
+    startRealtime();
+
+    // poll احتياطي كل 10 ثوانٍ في حال فقد أي حدث realtime
+    syncInterval = setInterval(autoSync, 10000);
 }
 function updateUserDisplay() {
     // يمكنك إضافته في الهيدر لاحقًا
@@ -696,6 +768,7 @@ function applyUserPermissions() {
 function logout() {
     sessionStorage.removeItem('gii_auth');
     if (syncInterval) clearInterval(syncInterval);
+    stopRealtime();
     location.reload();
 }
 
