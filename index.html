@@ -1632,16 +1632,55 @@ function importExcel() {
         reader.onload = async function(ev) {
             try {
                 const data = new Uint8Array(ev.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+
+                // Helper: parse date value from Excel (handles JS Date, string, or Excel serial number)
+                function parseExcelDate(val) {
+                    if (!val) return null;
+                    // Already a JS Date object (from cellDates: true)
+                    if (val instanceof Date && !isNaN(val.getTime())) return val;
+                    // String like "15/06/2025" or "2025-06-15"
+                    if (typeof val === 'string') {
+                        // Try DD/MM/YYYY
+                        const dmy = val.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                        if (dmy) return new Date(+dmy[3], +dmy[2]-1, +dmy[1]);
+                        // Try YYYY-MM-DD
+                        const ymd = val.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+                        if (ymd) return new Date(+ymd[1], +ymd[2]-1, +ymd[3]);
+                        // Fallback to native parse
+                        const d = new Date(val);
+                        if (!isNaN(d.getTime())) return d;
+                    }
+                    // Excel serial number (days since 1899-12-30)
+                    if (typeof val === 'number' && val > 0) {
+                        const excelEpoch = new Date(1899, 11, 30);
+                        const d = new Date(excelEpoch.getTime() + val * 86400000);
+                        return d;
+                    }
+                    return null;
+                }
 
                 let importedCount = 0;
 
                 jsonData.forEach(row => {
                     const styleNo = (row["STYLE NO"] || row["Style No"] || row["STYLE"] || "").toString().trim();
                     if (!styleNo) return;
+
+                    // Parse date from Excel
+                    const rawDate = row["DATE"] || row["Date"] || row["date"] || row["تاريخ"] || "";
+                    let createdAt;
+                    const parsedDate = parseExcelDate(rawDate);
+                    if (parsedDate) {
+                        const y = parsedDate.getFullYear();
+                        const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+                        const day = String(parsedDate.getDate()).padStart(2, '0');
+                        createdAt = new Date(`${y}-${m}-${day}T12:00:00Z`).toISOString();
+                    } else {
+                        createdAt = new Date().toISOString();
+                    }
 
                     const record = {
                         id: Date.now() + importedCount,
@@ -1652,7 +1691,8 @@ function importExcel() {
                         cutNo: parseInt(row["CUT NO"] || row["CUT"] || row["Cut No"] || 0),
                         color: (row["COLOR"] || row["Color"] || "N/A").toString().trim(),
                         season: (row["SEASON"] || row["Season"] || "N/A").toString().trim(),
-                        total: parseInt(row["TOTAL"] || row["Total Qty"] || row["TOTAL QTY"] || 0)
+                        total: parseInt(row["TOTAL"] || row["Total Qty"] || row["TOTAL QTY"] || 0),
+                        createdAt
                     };
 
                     if (record.total > 0) {
