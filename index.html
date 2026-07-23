@@ -254,6 +254,9 @@
         .td-cut { color: var(--accent); font-weight: 600; }
         .td-total { font-weight: 700; color: var(--navy); }
         .td-season { color: var(--success); font-weight: 500; }
+        .cell-enteredBy { font-size: 12.5px; line-height: 1.5; white-space: nowrap; }
+        .cell-enteredBy .eb-name { font-weight: 700; color: var(--navy); }
+        .cell-enteredBy .eb-meta { display: block; font-size: 10.5px; color: var(--muted); font-weight: 500; }
         tfoot tr { background: #eef2fb; }
         tfoot td {
             padding: 11px 8px; text-align: center; font-family: 'Syne', sans-serif;
@@ -544,6 +547,7 @@
                             </th>
                             <th>STYLE</th><th>ERP</th><th>LINE</th><th>BATCH</th>
                             <th>CUT</th><th>COLOR</th><th>SEASON</th><th>TOTAL</th><th>DATE</th>
+                            <th>ENTERED BY</th>
                             <th class="no-print">EDIT</th>
                         </tr>
                     </thead>
@@ -625,21 +629,31 @@ const STATE_ID    = 1;
 // =============================================
 const USERS = [
     {
-        username: "admin",
-        password: "YNKN2026",
+        username: "yassin",
+        password: "Yassin2026",
         role: "admin",
-        name: "مدير النظام"
+        name: "YASSIN KHAN",
+        empId: "EMP-001"
     },
     {
-        username: "entry",
-        password: "Entry2026",
+        username: "ahmed",
+        password: "Ahmed2026",
         role: "user",
-        name: "موظف الإدخال"
+        name: "AHMED SAMY",
+        empId: "EMP-002"
+    },
+    {
+        username: "howaida",
+        password: "Howaida2026",
+        role: "user",
+        name: "HOWAIDA",
+        empId: "EMP-003"
     }
 ];
 
 // Current logged in user
 let currentUser = null;
+let currentUserIp = 'unknown';
 let dataRecords   = [];
 let reportHistory = [];
 let cutNoChart, totalQtyChart, trendChart, seasonChart;
@@ -812,6 +826,9 @@ async function showSystem() {
     document.getElementById('mainContent').style.display = 'block';
     showHub();
 
+    // جلب IP الجهاز الحالي (IP عام/الشبكة، مش الـ IP المحلي الداخلي)
+    fetchClientIp();
+
     // إظهار اسم المستخدم في الهيدر (اختياري)
     updateUserDisplay();
 
@@ -835,6 +852,19 @@ async function showSystem() {
 function updateUserDisplay() {
     // يمكنك إضافته في الهيدر لاحقًا
     console.log(`Logged in as: ${currentUser.name} (${currentUser.role})`);
+}
+
+// جلب IP الجهاز العام (public IP) عبر خدمة خارجية مجانية بدون مفتاح
+// ملحوظة: ده الـ IP العام بتاع الشبكة/الراوتر مش الـ IP الداخلي للجهاز نفسه،
+// لأن المتصفح لأسباب أمنية مش بيسمح بمعرفة الـ IP الداخلي مباشرة.
+async function fetchClientIp() {
+    try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        currentUserIp = data.ip || 'unknown';
+    } catch (e) {
+        currentUserIp = 'unknown';
+    }
 }
 
 // =============================================
@@ -946,7 +976,10 @@ async function addData() {
         color:  document.getElementById('color').value.trim()  || 'N/A',
         season: document.getElementById('season').value.trim() || 'N/A',
         total:  totalVal,
-        createdAt
+        createdAt,
+        enteredBy:   currentUser?.name  || 'N/A',
+        enteredById: currentUser?.empId || 'N/A',
+        enteredIp:   currentUserIp      || 'unknown'
     });
 
     resetForm();
@@ -994,6 +1027,10 @@ function renderTable() {
             <td class="td-season cell-season">${r.season}</td>
             <td class="td-total  cell-total">${r.total}</td>
             <td class="cell-date">${dateDisp}</td>
+            <td class="cell-enteredBy">
+                <span class="eb-name">${r.enteredBy || '—'}</span>
+                <span class="eb-meta">${r.enteredById || '—'} · ${r.enteredIp || '—'}</span>
+            </td>
             <td class="no-print">
                 <button onclick="toggleEdit(${r.id})" id="btn-edit-${r.id}" class="btn-edit-row">EDIT</button>
             </td>
@@ -1834,7 +1871,10 @@ function importExcel() {
                         color: (row["COLOR"] || row["Color"] || "N/A").toString().trim(),
                         season: (row["SEASON"] || row["Season"] || "N/A").toString().trim(),
                         total: parseInt(row["TOTAL"] || row["Total Qty"] || row["TOTAL QTY"] || 0),
-                        createdAt
+                        createdAt,
+                        enteredBy:   currentUser?.name  || 'N/A',
+                        enteredById: currentUser?.empId || 'N/A',
+                        enteredIp:   currentUserIp      || 'unknown'
                     };
 
                     if (record.total > 0) {
