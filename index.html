@@ -389,7 +389,7 @@
 <!-- LOGIN -->
 <div id="loginOverlay">
     <div class="login-card">
-    <div class="login-logo-area">YNKN</div>
+    <div class="login-logo-area">YNKN KHAN</div>
     <div class="login-title">LABEL PRINTING SYSTEM</div>
     <div class="login-sub">GLOBE INTERNATIONAL INDUSTRIES</div>
     
@@ -413,7 +413,7 @@
     <header id="appHeader" class="no-print">
         <div class="header-row1">
             <div class="header-brand">
-                <div class="header-logo">YNKN</div>
+                <div class="header-logo">YNKN KHAN</div>
                 <div>
                     <div class="header-title">LABEL PRINTING DEPT</div>
                     <div class="header-sub">GLOBE INTERNATIONAL INDUSTRIES</div>
@@ -1442,14 +1442,15 @@ async function appendToExistingExcel() {
             const seasonYear = now.getFullYear();
             const seasonMonth = now.getMonth() + 1;
             const yearShort = seasonYear % 100;
-            const getISOWeek = (d) => {
-                const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-                const dayNum = target.getUTCDay() || 7;
-                target.setUTCDate(target.getUTCDate() + 4 - dayNum);
-                const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
-                return Math.ceil((((target - yearStart) / 86400000) + 1) / 7);
+            // حساب رقم الأسبوع — الأسبوع يبدأ من السبت
+            const getWeekNum = (d) => {
+                const start    = new Date(d.getFullYear(), 0, 1);
+                const startDow = start.getDay();                   // 0=Sun … 6=Sat
+                const satOff   = (startDow === 6) ? 0 : (startDow + 1); // offset لأول سبت
+                const dayOfYear = Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 86400000) + 1;
+                return Math.ceil((dayOfYear + satOff) / 7);
             };
-            const weekNum = getISOWeek(now);
+            const weekNum = getWeekNum(now);
             const FIXED_NUMBER = 25548;
 
             const imgFactory = wb.addImage({ base64: ICON_FACTORY_B64, extension: 'png' });
@@ -1653,14 +1654,15 @@ async function exportToWord() {
     // Compute variable week (YY/ISOweek) AND variable Year/Month (replaces template's static 2026/6).
     const now = new Date();
     const yearShort = String(now.getFullYear() % 100).padStart(2,'0');
-    const getISOWeek = (d) => {
-        const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-        const dn = t.getUTCDay() || 7;
-        t.setUTCDate(t.getUTCDate() + 4 - dn);
-        const ys = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-        return Math.ceil((((t - ys) / 86400000) + 1) / 7);
+    // حساب رقم الأسبوع — الأسبوع يبدأ من السبت
+    const getWeekNum = (d) => {
+        const start    = new Date(d.getFullYear(), 0, 1);
+        const startDow = start.getDay();                   // 0=Sun … 6=Sat
+        const satOff   = (startDow === 6) ? 0 : (startDow + 1);
+        const dayOfYear = Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 86400000) + 1;
+        return Math.ceil((dayOfYear + satOff) / 7);
     };
-    const weekYear = `${yearShort}/${getISOWeek(now)}`;
+    const weekYear = `${yearShort}/${getWeekNum(now)}`;
     const yearMonth = `${now.getFullYear()}/${now.getMonth() + 1}`; // dynamic replacement for the template's static "2026/6"
 
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[ch]));
