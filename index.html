@@ -389,7 +389,7 @@
 <!-- LOGIN -->
 <div id="loginOverlay">
     <div class="login-card">
-    <div class="login-logo-area">YNKN</div>
+    <div class="login-logo-area">YNKN KHAN</div>
     <div class="login-title">LABEL PRINTING SYSTEM</div>
     <div class="login-sub">GLOBE INTERNATIONAL INDUSTRIES</div>
     
@@ -413,7 +413,7 @@
     <header id="appHeader" class="no-print">
         <div class="header-row1">
             <div class="header-brand">
-                <div class="header-logo">YNKN</div>
+                <div class="header-logo">YNKN KHAN</div>
                 <div>
                     <div class="header-title">LABEL PRINTING DEPT</div>
                     <div class="header-sub">GLOBE INTERNATIONAL INDUSTRIES</div>
@@ -1446,7 +1446,7 @@ async function appendToExistingExcel() {
             const getWeekNum = (d) => {
                 const start    = new Date(d.getFullYear(), 0, 1);
                 const startDow = start.getDay();                   // 0=Sun … 6=Sat
-                const satOff   = (startDow === 6) ? 0 : (startDow + 1); // offset لأول سبت
+                const satOff   = (startDow === 6) ? 0 : (startDow + 1);
                 const dayOfYear = Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 86400000) + 1;
                 return Math.ceil((dayOfYear + satOff) / 7);
             };
@@ -1651,10 +1651,9 @@ async function exportToWord() {
     if (!selected.length) { alert('Please select at least one row'); return; }
     if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
 
-    // Compute variable week (YY/ISOweek) AND variable Year/Month (replaces template's static 2026/6).
+    // Compute variable week (YY/Week) AND variable Year/Month — الأسبوع يبدأ السبت
     const now = new Date();
     const yearShort = String(now.getFullYear() % 100).padStart(2,'0');
-    // حساب رقم الأسبوع — الأسبوع يبدأ من السبت
     const getWeekNum = (d) => {
         const start    = new Date(d.getFullYear(), 0, 1);
         const startDow = start.getDay();                   // 0=Sun … 6=Sat
