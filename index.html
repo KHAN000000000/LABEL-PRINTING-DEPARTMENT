@@ -643,11 +643,18 @@ const USERS = [
         empId: "EMP-002"
     },
     {
+        username: "abdelrahman",
+        password: "Abdo2026",
+        role: "user",
+        name: "ABDELRAHMAN",
+        empId: "EMP-003"
+    },
+    {
         username: "howaida",
         password: "Howaida2026",
         role: "user",
         name: "HOWAIDA",
-        empId: "EMP-003"
+        empId: "EMP-004"
     }
 ];
 
@@ -1442,10 +1449,10 @@ async function appendToExistingExcel() {
             const seasonYear = now.getFullYear();
             const seasonMonth = now.getMonth() + 1;
             const yearShort = seasonYear % 100;
-            // حساب رقم الأسبوع — الأسبوع يبدأ من السبت
+            // الأسبوع يبدأ السبت
             const getWeekNum = (d) => {
                 const start    = new Date(d.getFullYear(), 0, 1);
-                const startDow = start.getDay();                   // 0=Sun … 6=Sat
+                const startDow = start.getDay();
                 const satOff   = (startDow === 6) ? 0 : (startDow + 1);
                 const dayOfYear = Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 86400000) + 1;
                 return Math.ceil((dayOfYear + satOff) / 7);
@@ -1651,12 +1658,13 @@ async function exportToWord() {
     if (!selected.length) { alert('Please select at least one row'); return; }
     if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
 
-    // Compute variable week (YY/Week) AND variable Year/Month — الأسبوع يبدأ السبت
+    // Compute variable week (YY/ISOweek) AND variable Year/Month (replaces template's static 2026/6).
     const now = new Date();
     const yearShort = String(now.getFullYear() % 100).padStart(2,'0');
+    // الأسبوع يبدأ السبت
     const getWeekNum = (d) => {
         const start    = new Date(d.getFullYear(), 0, 1);
-        const startDow = start.getDay();                   // 0=Sun … 6=Sat
+        const startDow = start.getDay();
         const satOff   = (startDow === 6) ? 0 : (startDow + 1);
         const dayOfYear = Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 86400000) + 1;
         return Math.ceil((dayOfYear + satOff) / 7);
