@@ -1659,10 +1659,16 @@ async function exportToWord() {
     if (!selected.length) { alert('Please select at least one row'); return; }
     if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
  
+    // الأسبوع يبدأ الأحد ويتغير كل يوم أحد (نفس WEEKNUM type 1 في Excel)
+    const getSundayWeek = (d) => {
+        const jan1 = new Date(d.getFullYear(), 0, 1);
+        const dayOfYear = Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - jan1) / 86400000) + 1;
+        return Math.ceil((dayOfYear + jan1.getDay()) / 7);
+    };
     const getLabelPeriod = () => {
         const date = new Date();
         return {
-            weekYear: '26/37',
+            weekYear: String(date.getFullYear() % 100).padStart(2, '0') + '/' + getSundayWeek(date),
             yearMonth: `${date.getFullYear()}/${date.getMonth() + 1}`
         };
     };
